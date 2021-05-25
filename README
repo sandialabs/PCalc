@@ -1,0 +1,19 @@
+The following repositories are dependencies of PCalc and should be built in the following order:
+
+https://github.com/sandialabs/DbTableDefs
+https://github.com/sandialabs/gndd_utils
+https://github.com/sandialabs/DbTableDefsExtended
+https://github.com/sandialabs/SeismicBaseData
+https://github.com/sandialabs/BaseObjects
+https://github.com/sandialabs/GeoTessJava
+https://github.com/sandialabs/Bender
+https://github.com/sandialabs/LibCorr3dGMP
+https://github.com/sandialabs/LookupTablesDz
+https://github.com/sandialabs/InfrasoundPredictor
+https://github.com/sandialabs/GeoTessBuilder
+https://github.com/sandialabs/ParallelUtils
+https://github.com/sandialabs/SLBMWrapper
+
+SLBMWrapper is also dependent on SLBM-JNI, which may be downloaded from
+https://www.sandia.gov/rstt/software/downloads/index.html
+Check the README in SLBMWrapper for more details.
