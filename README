@@ -1,19 +1,42 @@
-The following repositories are dependencies of PCalc and should be built in the following order:
+PCalc is a software tool for extracting information from seismic velocity 
+models, including:
+    - velocity profiles, transects and grid, 
+    - predictions of travel time, uncertainty, and more,
+    - ray path geometries.
 
-https://github.com/sandialabs/DbTableDefs
-https://github.com/sandialabs/gndd_utils
-https://github.com/sandialabs/DbTableDefsExtended
-https://github.com/sandialabs/SeismicBaseData
-https://github.com/sandialabs/BaseObjects
-https://github.com/sandialabs/GeoTessJava
-https://github.com/sandialabs/Bender
-https://github.com/sandialabs/LibCorr3dGMP
-https://github.com/sandialabs/LookupTablesDz
-https://github.com/sandialabs/InfrasoundPredictor
-https://github.com/sandialabs/GeoTessBuilder
-https://github.com/sandialabs/ParallelUtils
-https://github.com/sandialabs/SLBMWrapper
+PCalc is delivered with the following components:
 
-SLBMWrapper is also dependent on SLBM-JNI, which may be downloaded from
-https://www.sandia.gov/rstt/software/downloads/index.html
-Check the README in SLBMWrapper for more details.
+- A license agreement.
+
+- PCalc_Users_Manual.pdf.
+
+- Source code
+
+- A precompiled jar file: target/pcalc-<version>-jar-with-dependencies.jar. 
+  This jar file can be run as a a standalone application or can be used as a 
+  library in user-developed java applications.  The jar was compiled with 
+  java JDK version 10.
+
+- A pom.xml file which can be used with Maven (https://maven.apache.org) 
+  to rebuild the jar file from the source code.
+
+- Run-script pcalc.sh.  User's will likely have to edit some paths defined
+  in the run script to point to correct locations on their systems.
+
+Oracle Libraries
+
+PCalc depends on Oracle ojdbc<version>.jar.  This library is not delivered
+with PCalc. Users will need to find the required jar file on their system 
+and specify its location in the pcalc.sh run-script and/or maven pom.xml file.  
+PCalc was tested successfully with ojbdc7 and ojbdc8.  Other versions
+may work as well.
+
+RSTT/SLBM
+
+PCalc can compute predictions using RSTT/SLBM but the C++ SLBM libraries must
+be downloaded and installed.  To install SLBM, download the source code from
+https://www.sandia.gov/rstt/software/downloads. Unzip the download file and 
+cd into the unzipped rstt directory.  Type 'make' to build the SLBM 
+libraries.  Edit run-script pcalc.sh and specify the path to the rstt
+directory.
+For more information about RSTT visit https://www.sandia.gov/rstt.

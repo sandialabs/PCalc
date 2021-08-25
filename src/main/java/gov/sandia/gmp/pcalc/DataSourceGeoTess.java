@@ -1,148 +1,210 @@
-/******************************************************************************
- *
- *	Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
- *
- *	BSD Open Source License.
- *	All rights reserved.
- *
- *	Redistribution and use in source and binary forms, with or without
- *	modification, are permitted provided that the following conditions are met:
- *
- *	1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
- *	2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
- *	3. All advertising materials mentioning features or use of this software must display the following acknowledgement: This product includes software developed by Sandia National Laboratories.
- *	4. Neither the name of Sandia National Laboratories nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
- *
- *	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ''AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- ******************************************************************************/
 package gov.sandia.gmp.pcalc;
 
-import gov.sandia.geotess.*;
-import gov.sandia.geotessbuilder.GeoTessBuilderMain;
-import gov.sandia.gmp.baseobjects.geovector.GeoVector;
-import gov.sandia.gmp.baseobjects.globals.SeismicPhase;
-import gov.sandia.gmp.baseobjects.interfaces.ReceiverInterface;
-import gov.sandia.gmp.util.globals.DataType;
-import gov.sandia.gmp.util.globals.Globals;
-import gov.sandia.gmp.util.numerical.vector.VectorGeo;
-import gov.sandia.gmp.util.propertiesplus.PropertiesPlus;
-
-import java.io.DataInputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Map.Entry;
 
-public class DataSourceGeoTess extends DataSource {
-    public DataSourceGeoTess(PCalc pcalc) throws Exception {
-        super(pcalc);
+import gov.sandia.geotess.Data;
+import gov.sandia.geotess.GeoTessGrid;
+import gov.sandia.geotess.GeoTessMetaData;
+import gov.sandia.geotess.GeoTessModel;
+import gov.sandia.geotess.GeoTessModelUtils;
+import gov.sandia.geotess.GeoTessPosition;
+import gov.sandia.geotess.PointMap;
+import gov.sandia.geotess.extensions.libcorr3d.LibCorr3DModel;
+import gov.sandia.geotessbuilder.GeoTessBuilderMain;
+import gov.sandia.gmp.baseobjects.geovector.GeoVector;
+import gov.sandia.gmp.baseobjects.globals.GeoAttributes;
+import gov.sandia.gmp.baseobjects.interfaces.ReceiverInterface;
+import gov.sandia.gmp.baseobjects.seismicitydepth.SeismicityDepthModel;
+import gov.sandia.gmp.util.globals.DataType;
+import gov.sandia.gmp.util.globals.Globals;
+import gov.sandia.gmp.util.numerical.polygon.Polygon;
+import gov.sandia.gmp.util.numerical.vector.VectorGeo;
+import gov.sandia.gmp.util.propertiesplus.PropertiesPlus;
 
-        bucket.inputType = InputType.GEOTESS;
+public class DataSourceGeoTess extends DataSource
+{
+	public DataSourceGeoTess(PCalc pcalc) throws Exception
+	{
+		super(pcalc);
 
-        pcalc.extractStaPhaseInfo(bucket, true);
-        ReceiverInterface receiver = bucket.receivers.get(0);
+		bucket.inputType = IOType.GEOTESS;
 
-        SeismicPhase phase = bucket.phases.get(0);
+		pcalc.extractStaPhaseInfo(bucket, true);
+		ReceiverInterface receiver = bucket.receivers.get(0);
 
-        int modelDimensions = properties.getInt("geotessModelDimensions", -1);
+		int modelDimensions = properties.containsKey("geotessDepthSpacing")  
+				|| properties.containsKey("geotessDepths") ? 3 : 2;
 
-        if (modelDimensions == -1)
-            throw new Exception("property geotessModelDimensions is not specified in the properties file.  Must equal either 2 or 3.");
+		GeoTessPosition seismicity_depth = null;
+		int seismicityDepthMinIndex = -1;
+		int seismicityDepthMaxIndex = -1;
 
-        if (modelDimensions != 2 && modelDimensions != 3)
-            throw new Exception("property geotessModelDimensions = " + modelDimensions + " is invalid.  Valid values are 2 or 3");
+		double depthSpacing = Double.NaN;
+		double[] depths = null;
 
-        GeoTessPosition seismicity_depth = null;
-        double depthSpacing = Double.NaN;
+		if (modelDimensions == 3)
+		{
+			if (properties.containsKey("geotessDepthSpacing")  
+					&& properties.containsKey("geotessDepths"))
+				throw new Exception("Cannot specify both geotessDepthSpacing and geotessDepths");
 
-        if (modelDimensions == 3) {
-            depthSpacing = properties.getDouble("geotessDepthSpacing", Double.NaN);
-            if (Double.isNaN(depthSpacing))
-                throw new Exception("property geotessDepthSpacing must be specified in the properties file when geotessModelDimensions = 3");
-            if (depthSpacing <= 0.)
-                throw new Exception(String.format("property geotessDepthSpacing = %1.3f but must be > 0. when geotessModelDimensions = 3",
-                        depthSpacing));
+			if (properties.containsKey("geotessDepths"))
+			{
+				depths = properties.getDoubleArray("geotessDepths");
+				if (depths.length == 0)
+					throw new Exception(String.format("property geotessDepths = %s but must specify at least one depth",
+							properties.getProperty("geotessDepths")));
+			}
 
-            InputStream s = getClass().getResourceAsStream("/seismicity_depth.geotess");
-            if (s == null)
-                throw new Exception("Resource seismicity_depth.geotess not found.");
-            GeoTessModel seismicityDepthModel = new GeoTessModel(new DataInputStream(s));
-            seismicity_depth = seismicityDepthModel.getGeoTessPosition();
-        }
+			if (properties.containsKey("geotessDepthSpacing"))
+			{
+				depthSpacing = properties.getDouble("geotessDepthSpacing");
+				if (depthSpacing <= 0.)
+					throw new Exception(String.format("property geotessDepthSpacing = %1.3f but must be > 0. when geotessModelDimensions = 3",
+							depthSpacing));
+				// if property seismicityDepthModel is specified, then the seismicity depth model will be loaded from the
+				// the specified file.  If seismicityDepthModel is 'default', or is not specified, then the default model
+				// will be loaded from the internal resources directory.
+				seismicity_depth = SeismicityDepthModel.getGeoTessPosition(properties.getProperty("seismicityDepthModel", "default"));
 
-        // Create a MetaData object in which we can specify information
-        // needed for model construction.
-        GeoTessMetaData metaData = new GeoTessMetaData();
+				seismicityDepthMinIndex = seismicity_depth.getModel().getMetaData().getAttributeIndex("SEISMICITY_DEPTH_MIN");
+				seismicityDepthMaxIndex = seismicity_depth.getModel().getMetaData().getAttributeIndex("SEISMICITY_DEPTH_MAX");
 
-        // Specify a description of the model.
-        StringBuffer description = new StringBuffer(properties.getProperty("geotessDescription",
-                "GeoTessModel constructed by PCalc containing predicted values"));
-        description.append("\n\nPhase = ").append(phase.toString()).append("\n");
-        description.append("Receiver = ").append(receiver.getSiteRow().toString()).append("\n");
-        metaData.setDescription(description.toString());
+				if (log.isOutputOn())
+				{
+					log.writeln("Seismicity Depth Model: \n");
+					//log.writeln(seismicity_depth.getModel());
+					log.writeln(GeoTessModelUtils.statistics(seismicity_depth.getModel()));
+					log.writeln();
+				}
+			}
+		}
 
-        // Specify a list of layer names delimited by semi-colons
-        if (modelDimensions == 2)
-            metaData.setLayerNames("surface");
-        else
-            metaData.setLayerNames("sesimicity_depth");
+		// Create a MetaData object in which we can specify information
+		// needed for model construction.
+		GeoTessMetaData metaData = new GeoTessMetaData();
 
-        String[] attributes = new String[pcalc.outputAttributes.size()];
-        String[] units = new String[pcalc.outputAttributes.size()];
-        for (int i = 0; i < pcalc.outputAttributes.size(); ++i) {
-            attributes[i] = pcalc.outputAttributes.get(i).toString();
-            units[i] = pcalc.outputAttributes.get(i).getUnits();
-        }
-        metaData.setAttributes(attributes, units);
+		// will repopulate the description in DataSinkGeoTess before writing to output file.
+		metaData.setDescription("");
 
-        // specify the DataType for the data. All attributes, in all
-        // profiles, will have the same data type.  Note that this
-        // applies only to the data; radii are always stored as floats.
-        metaData.setDataType(DataType.valueOf(
-                properties.getProperty("geotessDataType", "FLOAT").toUpperCase()));
+		// Specify a list of layer names delimited by semi-colons
+		if (modelDimensions == 2)
+			metaData.setLayerNames("surface");
+		else
+			metaData.setLayerNames("sesimicity_depth");
 
-        // specify the name of the software that is going to generate
-        // the model.  This gets stored in the model for future reference.
-        metaData.setModelSoftwareVersion(getClass().getCanonicalName());
+		String[] attributes = new String[pcalc.outputAttributes.size()];
+		String[] units = new String[pcalc.outputAttributes.size()];
+		for (int i=0; i< pcalc.outputAttributes.size(); ++i)
+		{
+			attributes[i] = pcalc.outputAttributes.get(i).toString();
+			units[i] = pcalc.outputAttributes.get(i).getUnits();
+		}
+		metaData.setAttributes(attributes, units);
 
-        // specify the date when the model was generated.  This gets
-        // stored in the model for future reference.
-        metaData.setModelGenerationDate(new Date().toString());
+		// specify the DataType for the data. All attributes, in all
+		// profiles, will have the same data type.  Note that this
+		// applies only to the data; radii are always stored as floats.
+		metaData.setDataType(DataType.valueOf(
+				properties.getProperty("geotessDataType", "FLOAT").toUpperCase()));
 
-        metaData.setEarthShape(VectorGeo.earthShape);
+		// specify the name of the software that is going to generate
+		// the model.  This gets stored in the model for future reference.
+		metaData.setModelSoftwareVersion("PCalc "+PCalc.getVersion());
 
-        GeoTessGrid grid = null;
+		// specify the date when the model was generated.  This gets
+		// stored in the model for future reference.
+		metaData.setModelGenerationDate(new Date().toString());
 
-        if (pcalc.properties.containsKey("geotessInputGridFile"))
-            grid = new GeoTessGrid(pcalc.properties.getFile("geotessInputGridFile"));
-        else {
-            PropertiesPlus gridProperties = new PropertiesPlus();
-            gridProperties.setProperty("verbosity = 0");
-            gridProperties.setProperty("gridConstructionMode = scratch");
-            gridProperties.setProperty("nTessellations = 1");
-            for (Entry<Object, Object> p : properties.entrySet()) {
+		metaData.setEarthShape(VectorGeo.earthShape);
+
+		GeoTessGrid grid = null;
+
+		if (pcalc.properties.containsKey("geotessInputGridFile"))
+			grid = new GeoTessGrid(pcalc.properties.getFile("geotessInputGridFile"));
+		else
+		{
+			PropertiesPlus gridProperties = new PropertiesPlus();
+			gridProperties.setProperty("verbosity = 0");
+			gridProperties.setProperty("gridConstructionMode = scratch");
+			gridProperties.setProperty("nTessellations = 1");
+			for (Entry<Object, Object> p : properties.entrySet())
+            {
                 String key = (String) p.getKey();
-                if (key.startsWith("geotess") && !key.equals("geotessGridFile")) {
-                    key = key.substring(7, 8).toLowerCase() + key.substring(8);
-                    gridProperties.setProperty(key, (String) p.getValue());
+                if (key.startsWith("geotess") && !key.equals("geotessGridFile"))
+                {
+                    key = key.substring(7,8).toLowerCase()+key.substring(8);
+                    gridProperties.setProperty(key,  (String) p.getValue());
                 }
             }
 
-            // apply euler rotation that will place grid vertex 0 at the station location.
-            if (pcalc.properties.getBoolean("geotessRotateGridToStation", true))
-                gridProperties.setProperty("eulerRotationAngles",
-                        String.format("%1.6f, %1.6f, 90.",
-                                90. + receiver.getPosition().getLonDegrees(),
-                                90. - receiver.getPosition().getGeocentricLatDegrees()));
+            if (gridProperties.containsKey("polygons"))
+            {
+                String property = properties.getProperty("geotessPolygons");
+                property = property.replaceAll("<site.lat>", String.format("%1.6f", receiver.getPosition().getLatDegrees()))
+                        .replaceAll("<site.lon>", String.format("%1.6f", receiver.getPosition().getLonDegrees()));
+                gridProperties.setProperty("polygons", property);
+            }
 
+            // apply rotation that will place grid vertex 0 at the station location.
+            if (pcalc.properties.getBoolean("geotessRotateGridToStation", true))
+                gridProperties.setProperty("rotateGrid",
+                        String.format("%1.6f %1.6f",
+                                receiver.getPosition().getLatDegrees(),
+                                receiver.getPosition().getLonDegrees()));
 
             grid = (GeoTessGrid) GeoTessBuilderMain.run(gridProperties);
         }
+        
+        String outputType = properties.getProperty("outputType", "geotess");
+        
+        if (outputType.equalsIgnoreCase("libcorr3d"))
+        {
+        	boolean ok = pcalc.outputAttributes.size() == 2 
+            		&& pcalc.outputAttributes.get(0) == GeoAttributes.TT_DELTA_AK135 
+            		&& pcalc.outputAttributes.get(1) == GeoAttributes.TT_MODEL_UNCERTAINTY;
+            		
+        	if (!ok)
+        	{
+        		String outputAttributes = "";
+        		for (GeoAttributes a : pcalc.outputAttributes)
+        			outputAttributes = outputAttributes + ", "+a.toString().toLowerCase();
+        		if (outputAttributes.length() > 2)
+        			outputAttributes = outputAttributes.substring(2);
+        		
+        		throw new Exception(String.format("When outputType is %s outputAttributes must \n"
+        				+ "equal tt_delta_ak135, tt_model_uncertainty but that is not the case.\n"
+        				+ "outputAttributes = %s",
+        				outputType, outputAttributes));
+        	}
 
-        // call a GeoTessModel constructor to build the model.
-        bucket.geotessModel = new GeoTessModel(grid, metaData);
+        	LibCorr3DModel model = new LibCorr3DModel(grid, metaData);
+            ReceiverInterface r = bucket.receivers.get(0);
+            model.setSite(r.getSta(), r.getOndate(), r.getOffdate(), r.getPosition().getLatDegrees(),
+                    r.getPosition().getLonDegrees(), -r.getPosition().getDepth(), r.getStaName(),
+                    r.getStaTypeString(), r.getRefsta(), r.getDnorth(), r.getDeast());
+
+            model.setPhase(bucket.phases.get(0).toString());
+            model.setSupportedPhases(bucket.supportedPhases);
+
+            model.setBaseModel(properties.getProperty("lookup2dModel", "AK135"));
+            model.setParameters(metaData.getAttributeNamesString());
+
+            bucket.geotessModel = model;
+        }
+        else
+        	bucket.geotessModel = new GeoTessModel(grid, metaData);
+        
+        double geotessActiveNodeRadius = properties.getDouble("geotessActiveNodeRadius", -1.);
+        Polygon polygon;
+        if (geotessActiveNodeRadius > 0.)
+        	polygon = new Polygon(receiver.getPosition().getUnitVector(), 
+        			Math.toRadians(geotessActiveNodeRadius), 100);
+        else
+        	polygon = new Polygon(true);
 
         double[] dataD = new double[bucket.geotessModel.getNAttributes()];
         Arrays.fill(dataD, Double.NaN);
@@ -151,47 +213,99 @@ public class DataSourceGeoTess extends DataSource {
         Arrays.fill(dataF, Float.NaN);
 
         // Populate the model with profiles.
-        for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx) {
-            if (modelDimensions == 2)
-                // this is a 2D model with data only at the surface of the earth
-                bucket.geotessModel.setProfile(vtx,
-                        metaData.getDataType() == DataType.DOUBLE ?
-                                Data.getDataDouble(dataD.clone()) :
-                                Data.getDataFloat(dataF.clone()));
-            else {
-                // retrieve the unit vector corresponding to the current vertex
-                double[] vertex = bucket.geotessModel.getGrid().getVertex(vtx);
-
-                float rsurface = (float) VectorGeo.getEarthRadius(vertex);
-                float rdepth = rsurface - Math.min(699.999F, (float) seismicity_depth.set(vertex, rsurface).getValue(2));
-
-                float[] radii = Globals.getArrayFloat(rdepth, rsurface, depthSpacing);
-
-                if (metaData.getDataType() == DataType.DOUBLE) {
-                    double[][] rawData = new double[radii.length][];
-                    for (int i = 0; i < radii.length; ++i)
-                        rawData[i] = dataD.clone();
-                    bucket.geotessModel.setProfile(vtx, 0, radii, rawData);
-                } else if (metaData.getDataType() == DataType.FLOAT) {
-                    float[][] rawData = new float[radii.length][];
-                    for (int i = 0; i < radii.length; ++i)
-                        rawData[i] = dataF.clone();
-                    bucket.geotessModel.setProfile(vtx, 0, radii, rawData);
-                }
-            }
+        if (modelDimensions == 2)
+        {
+        	// this is a 2D model with data only at the surface of the earth
+        	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
+        		if (polygon.contains(bucket.geotessModel.getGrid().getVertex(vtx)))
+        			bucket.geotessModel.setProfile(vtx,
+        					metaData.getDataType() == DataType.DOUBLE ?
+        							Data.getDataDouble(dataD.clone()) :
+        								Data.getDataFloat(dataF.clone()));
+        		else
+        			bucket.geotessModel.setProfile(vtx);
         }
+        else if (depths != null)
+        {
+        	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
+        	{
+        		// retrieve the unit vector corresponding to the current vertex
+        		double[] vertex = bucket.geotessModel.getGrid().getVertex(vtx);
 
-        if (log.isOutputOn())
-            log.writeln(bucket.geotessModel);
+        		double earthRadius = VectorGeo.getEarthRadius(vertex);
+
+        		float[] radii = new float[depths.length];
+        		for (int i=0; i<depths.length; ++i)
+        			radii[i] = (float) (earthRadius-depths[depths.length-i-1]);
+
+        		if (polygon.contains(vertex))
+        		{
+        			if (metaData.getDataType() == DataType.DOUBLE)
+        			{
+        				double[][] rawData = new double[radii.length][];
+        				for (int i = 0; i < radii.length; ++i)
+        					rawData[i] = dataD.clone();
+        				bucket.geotessModel.setProfile(vtx, 0, radii, rawData);
+        			}
+        			else if (metaData.getDataType() == DataType.FLOAT)
+        			{
+        				float[][] rawData = new float[radii.length][];
+        				for (int i = 0; i < radii.length; ++i)
+        					rawData[i] = dataF.clone();
+        				bucket.geotessModel.setProfile(vtx, 0, radii, rawData);
+        			}
+        		}
+        		else
+        			bucket.geotessModel.setProfile(vtx, 0, radii); 
+        	}
+        }
+        else
+        {
+        	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
+        	{
+        		// retrieve the unit vector corresponding to the current vertex
+        		double[] vertex = bucket.geotessModel.getGrid().getVertex(vtx);
+
+        		seismicity_depth.set(vertex, 1e4);
+        		double minDepth = seismicity_depth.getValue(seismicityDepthMinIndex);
+
+        		// maxDepth can be no less than minDepth and no greater than 700 km.
+        		double maxDepth = Math.min(700., Math.max(minDepth, seismicity_depth.getValue(seismicityDepthMaxIndex)));
+
+        		double earthRadius = VectorGeo.getEarthRadius(vertex);
+
+        		float[] radii = Globals.getArrayFloat(earthRadius-maxDepth, earthRadius-minDepth, depthSpacing);
+
+        		if (polygon.contains(vertex))
+        		{
+        			if (metaData.getDataType() == DataType.DOUBLE)
+        			{
+        				double[][] rawData = new double[radii.length][];
+        				for (int i = 0; i < radii.length; ++i)
+        					rawData[i] = dataD.clone();
+        				bucket.geotessModel.setProfile(vtx, 0, radii, rawData);
+        			}
+        			else if (metaData.getDataType() == DataType.FLOAT)
+        			{
+        				float[][] rawData = new float[radii.length][];
+        				for (int i = 0; i < radii.length; ++i)
+        					rawData[i] = dataF.clone();
+        				bucket.geotessModel.setProfile(vtx, 0, radii, rawData);
+        			}
+        		}
+        		else
+        			bucket.geotessModel.setProfile(vtx, 0, radii);
+        	}
+        }
 
         PointMap pm = bucket.geotessModel.getPointMap();
         bucket.points = new ArrayList<GeoVector>(pm.size());
 
         if (bucket.geotessModel.is3D())
-            for (int i = 0; i < pm.size(); ++i)
+            for (int i=0; i<pm.size(); ++i)
                 bucket.points.add(new GeoVector(pm.getPointUnitVector(i), pm.getPointRadius(i)));
         else
-            for (int i = 0; i < pm.size(); ++i)
+            for (int i=0; i<pm.size(); ++i)
                 bucket.points.add(new GeoVector(pm.getPointUnitVector(i),
                         VectorGeo.getEarthRadius(pm.getPointUnitVector(i))));
 

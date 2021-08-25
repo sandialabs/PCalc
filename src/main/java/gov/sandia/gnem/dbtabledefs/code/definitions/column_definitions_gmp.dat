@@ -1,0 +1,154 @@
+SQL Statement which produced this data:
+  select a.table_name, a.column_name, a.column_type, a.nativekeyname, d.EXTERNAL_TYPE, d.INTERNAL_FORMAT, d.EXTERNAL_FORMAT, 
+d.EXTERNAL_WIDTH, a.na_allowed, d.NA_VALUE, d.UNIT, d.range, d.SHORT_DESCRIPT, d.LONG_DESCRIPT
+from gmp2010.colassoc a, gmp2010.coldescript d 
+where a.SCHEMA_NAME=d.SCHEMA_NAME and a.COLUMN_NAME=d.COLUMN_NAME and a.SCHEMA_NAME = 'GMP'
+order by a.TABLE_NAME, a.COLUMN_POSITION
+
+TABLE_NAME	COLUMN_NAME	COLUMN_TYPE	NATIVEKEYNAME	EXTERNAL_TYPE	INTERNAL_FORMAT	EXTERNAL_FORMAT	EXTERNAL_WIDTH	NA_ALLOWED	NA_VALUE	UNIT	RANGE	SHORT_DESCRIPT	LONG_DESCRIPT
+algorithm	algorithmid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	-	-	-
+algorithm	name	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+algorithm	version	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+algorithm	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+algorithm	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+cell	cellid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	cellid > 0	-	-
+cell	geomodelid	foreign key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+cell	node0	foreign key	nodeid	long	number(10)	i10	10	n	-1	-	-	-	-
+cell	node1	foreign key	nodeid	long	number(10)	i10	10	n	-1	-	-	-	-
+cell	node2	foreign key	nodeid	long	number(10)	i10	10	n	-1	-	-	-	-
+cell	node3	foreign key	nodeid	long	number(10)	i10	10	y	-1	-	-	-	-
+eventterm	eventtermid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	eventtermid > 0	-	-
+eventterm	sourceid	unique key	sourceid	long	number(10)	i10	10	n	-1	-	sourceid > 0	-	-
+eventterm	tomorunid	unique key	tomorunid	long	number(10)	i10	10	n	-1	-	tomorunid > 0	-	-
+eventterm	geomodelid	unique key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+eventterm	eterm	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+geomodel	geomodelid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	-	-	-
+geomodel	earthshape	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+geomodel	dir	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+geomodel	dfile	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+geomodel	filedate	measurement data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+geomodel	description	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+geomodel	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+geomodel	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+node	nodeid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	nodeid > 0	-	-
+node	lat	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+node	lon	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+node	depth	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+observation	observationid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	observationid > 0	-	-
+observation	receiverid	foreign key	receiverid	long	number(10)	i10	10	n	-1	-	-	-	-
+observation	iphase	measurement data	-	string	varchar2(2000)	a2000	2000	n	-	-	any character string up to column size	-	-
+observation	arrivaltime	measurement data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	y	CURRENT_TIMESTAMP	-	-	-	-
+observation	timeuncertainty	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+observation	azimuth	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+observation	azuncertainty	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+observation	slowness	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+observation	slowuncertainty	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+observation	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+observation	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+obsseq	sequenceid	primary key	-	long	number(10)	i10	10	n	-1	-	-	-	-
+obsseq	observationid	primary key	observationid	long	number(10)	i10	10	n	-1	-	observationid > 0	-	-
+polygon	polygonid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	polygonid > 0	-	-
+polygon	dir	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+polygon	dfile	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+polygon	filedate	measurement data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+polygon	description	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+polygon	bottomlayer	measurement data	-	string	varchar2(2000)	a2000	2000	n	-	-	any character string up to column size	-	-
+polygon	toplayer	measurement data	-	string	varchar2(2000)	a2000	2000	n	-	-	any character string up to column size	-	-
+polygon	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+polygon	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+prediction	predictionid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	predictionid > 0	-	-
+prediction	sourceid	foreign key	sourceid	long	number(10)	i10	10	n	-1	-	sourceid > 0	-	-
+prediction	receiverid	foreign key	receiverid	long	number(10)	i10	10	n	-1	-	-	-	-
+prediction	geomodelid	foreign key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+prediction	algorithmid	foreign key	algorithmid	long	number(10)	i10	10	n	-1	-	-	-	-
+prediction	observationid	foreign key	observationid	long	number(10)	i10	10	y	-1	-	observationid > 0	-	-
+prediction	phase	measurement data	-	string	varchar2(30)	a30	30	n	-	-	any character string up to column size	-	-
+prediction	raytype	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+prediction	activefraction	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+prediction	traveltime	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+prediction	ttresidual	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+prediction	azimuth	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+prediction	slowness	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+prediction	backazimuth	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+prediction	turndepth	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+prediction	maxoutplane	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+prediction	calctime	measurement data	-	double	float(126)	e22.15	22	y	-999.0	-	-	-	-
+prediction	inpolygon	measurement data	-	string	varchar2(2)	a2	2	n	-	-	any character string up to column size	-	-
+prediction	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+prediction	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+predictsim	predictionid1	primary key	predictionid	long	number(10)	i10	10	n	-1	-	-	-	-
+predictsim	predictionid2	primary key	predictionid	long	number(10)	i10	10	n	-1	-	-	-	-
+predictsim	similarity	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+receiver	receiverid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	-	-	-
+receiver	sta	measurement data	-	string	varchar2(60)	a60	60	n	-	-	any character string up to column size	-	-
+receiver	lat	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+receiver	lon	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+receiver	elevation	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+receiver	starttime	measurement data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+receiver	endtime	measurement data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+receiver	polygonid	measurement data	-	long	number(10)	i10	10	y	-1	-	polygonid > 0	-	-
+receiver	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+receiver	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+receivercellassoc	receiverid	primary key	receiverid	long	number(10)	i10	10	n	-1	-	-	-	-
+receivercellassoc	cellid	primary key	cellid	long	number(10)	i10	10	n	-1	-	cellid > 0	-	-
+reppredict	predictionid1	primary key	predictionid	long	number(10)	i10	10	n	-1	-	-	-	-
+reppredict	predictionid2	primary key	predictionid	long	number(10)	i10	10	n	-1	-	-	-	-
+siteterm	sitetermid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	sitetermid > 0	-	-
+siteterm	receiverid	unique key	receiverid	long	number(10)	i10	10	n	-1	-	-	-	-
+siteterm	tomorunid	unique key	tomorunid	long	number(10)	i10	10	n	-1	-	tomorunid > 0	-	-
+siteterm	geomodelid	unique key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+siteterm	sterm	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+source	sourceid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	sourceid > 0	-	-
+source	eventid	measurement data	-	long	number(10)	i10	10	y	-1	-	-	-	-
+source	lat	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+source	lon	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+source	depth	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+source	origintime	measurement data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+source	gtlevel	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+source	numassoc	measurement data	-	long	number(10)	i10	10	n	-1	-	-	-	-
+source	polygonid	measurement data	-	long	number(10)	i10	10	y	-1	-	polygonid > 0	-	-
+source	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+source	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+sourcecellassoc	sourceid	primary key	sourceid	long	number(10)	i10	10	n	-1	-	sourceid > 0	-	-
+sourcecellassoc	cellid	primary key	cellid	long	number(10)	i10	10	n	-1	-	cellid > 0	-	-
+srcobsassoc	sourceid	primary key	sourceid	long	number(10)	i10	10	n	-1	-	sourceid > 0	-	-
+srcobsassoc	observationid	primary key	observationid	long	number(10)	i10	10	n	-1	-	observationid > 0	-	-
+srcobsassoc	phase	measurement data	-	string	varchar2(30)	a30	30	n	-	-	any character string up to column size	-	-
+srcobsassoc	delta	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+srcobsassoc	esaz	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+srcobsassoc	seaz	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+srcobsassoc	timedef	measurement data	-	string	varchar2(1)	a1	1	n	-	-	any character string up to column size	-	-
+srcobsassoc	azdef	measurement data	-	string	varchar2(1)	a1	1	n	-	-	any character string up to column size	-	-
+srcobsassoc	slowdef	measurement data	-	string	varchar2(1)	a1	1	n	-	-	any character string up to column size	-	-
+srcobsassoc	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+srcobsassoc	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+tomomodassoc	tomorunid	primary key	tomorunid	long	number(10)	i10	10	n	-1	-	tomorunid > 0	-	-
+tomomodassoc	geomodelid	primary key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+tomomodassoc	outeriter	measurement data	-	long	number(10)	i10	10	n	-1	-	-	-	-
+tomomodassoc	inneriter	measurement data	-	long	number(10)	i10	10	n	-1	-	-	-	-
+tomomodobsassoc	tomorunid	primary key	tomorunid	long	number(10)	i10	10	n	-1	-	tomorunid > 0	-	-
+tomomodobsassoc	geomodelid	primary key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+tomomodobsassoc	observationid	primary key	observationid	long	number(10)	i10	10	n	-1	-	observationid > 0	-	-
+tomomodobsassoc	status	measurement data	-	string	varchar2(100)	a100	100	n	-	-	any character string up to column size	-	-
+tomorun	tomorunid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	tomorunid > 0	-	-
+tomorun	algorithmid	foreign key	algorithmid	long	number(10)	i10	10	n	-1	-	-	-	-
+tomorun	polygonid	foreign key	polygonid	long	number(10)	i10	10	n	-1	-	polygonid > 0	-	-
+tomorun	outeriter	measurement data	-	long	number(10)	i10	10	n	-1	-	-	-	-
+tomorun	inneriter	measurement data	-	long	number(10)	i10	10	n	-1	-	-	-	-
+tomorun	inputprefix	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+tomorun	outputprefix	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+tomorun	dir	measurement data	-	string	varchar2(4000)	a4000	4000	n	-	-	any character string up to column size	-	-
+tomorun	description	measurement data	-	string	varchar2(4000)	a4000	4000	y	-	-	any character string up to column size	-	-
+tomorun	auth	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+tomorun	lddate	administrative data	-	string	timestamp(3)	a23:YYYY/MM/DD HH24:MI:SS.FF3	23	n	CURRENT_TIMESTAMP	-	-	-	-
+tomostats	tomostatsid	primary key	ownedid!	long	number(10)	i10	10	n	-1	-	tomostatsid > 0	-	-
+tomostats	tomorunid	foreign key	tomorunid	long	number(10)	i10	10	n	-1	-	tomorunid > 0	-	-
+tomostats	geomodelid	foreign key	geomodelid	long	number(10)	i10	10	n	-1	-	-	-	-
+tomostats	name	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-
+tomostats	minimum	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+tomostats	maximum	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+tomostats	mean	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+tomostats	rms	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+tomostats	stddev	measurement data	-	double	float(126)	e22.15	22	n	-999.0	-	-	-	-
+tomostats	count	measurement data	-	long	number(10)	i10	10	n	-1	-	-	-	-
+tomostats	units	measurement data	-	string	varchar2(64)	a64	64	n	-	-	any character string up to column size	-	-

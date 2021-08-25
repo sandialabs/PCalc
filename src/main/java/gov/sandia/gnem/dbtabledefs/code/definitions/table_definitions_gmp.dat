@@ -1,0 +1,25 @@
+SQL Statement which produced this data:
+  select table_name, descript from gmp2010.tabdescript where SCHEMA_NAME = 'GMP' order by TABLE_NAME
+
+TABLE_NAME	DESCRIPT
+algorithm	?
+cell	?
+eventterm	?
+geomodel	?
+node	?
+observation	?
+obsseq	?
+polygon	?
+prediction	?
+predictsim	?
+receiver	?
+receivercellassoc	?
+reppredict	?
+siteterm	?
+source	?
+sourcecellassoc	?
+srcobsassoc	?
+tomomodassoc	?
+tomomodobsassoc	?
+tomorun	?
+tomostats	?
