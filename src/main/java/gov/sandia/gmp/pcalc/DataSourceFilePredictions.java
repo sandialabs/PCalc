@@ -1,3 +1,35 @@
+/**
+ * Copyright 2009 Sandia Corporation. Under the terms of Contract
+ * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government
+ * retains certain rights in this software.
+ * 
+ * BSD Open Source License.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of Sandia National Laboratories nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 package gov.sandia.gmp.pcalc;
 
 import java.util.ArrayList;
@@ -11,6 +43,7 @@ import gov.sandia.gmp.util.containers.arraylist.ArrayListDouble;
 import gov.sandia.gmp.util.containers.arraylist.ArrayListInt;
 import gov.sandia.gmp.util.exceptions.GMPException;
 import gov.sandia.gmp.util.globals.GMTFormat;
+import gov.sandia.gmp.util.globals.Site;
 
 public class DataSourceFilePredictions extends DataSourceFile
 {
@@ -19,6 +52,7 @@ public class DataSourceFilePredictions extends DataSourceFile
   private int siteLatIndex=-1;
   private int siteLonIndex=-1;
   private int siteDepthIndex=-1;
+  private int siteOndateIndex=-1;
   private double sign=1;
   private int phaseIndex=-1;
 
@@ -129,11 +163,12 @@ public class DataSourceFilePredictions extends DataSourceFile
           siteDepthIndex = inputMap.get("site_depth");
           sign = 1.;
         }
+        siteOndateIndex = inputMap.get("site_ondate") == null ? -1 : inputMap.get("site_ondate");
       }
       else if (properties.containsKey("site"))
       {
         siteLatIndex = -1;
-        bucket.site = pcalc.getSite(properties);
+        bucket.site = PCalc.getSite(properties);
 
         Receiver receiver = new Receiver(bucket.site.getSta(), (int)bucket.site.getOndate(), (int)bucket.site.getOffdate(),
         		bucket.site.getLat(), bucket.site.getLon(), bucket.site.getElev(), bucket.site.getStaname(), bucket.site.getStatype(),
@@ -210,12 +245,19 @@ public class DataSourceFilePredictions extends DataSourceFile
           newBucket.time.add(GMTFormat.getEpochTime(Integer.parseInt(columns[jdateIndex])));
 
         if (siteLatIndex >= 0)
-          newBucket.receivers.add(new Receiver(
-              staIndex < 0 ? newBucket.site.getSta() : columns[staIndex],
-                  new GeoVector(
-                      Double.parseDouble(columns[siteLatIndex]),
-                      Double.parseDouble(columns[siteLonIndex]),
-                      sign*Double.parseDouble(columns[siteDepthIndex]),	true)));
+        {
+        	Receiver r = new Receiver(
+                    staIndex < 0 ? newBucket.site.getSta() : columns[staIndex],
+                            new GeoVector(
+                                Double.parseDouble(columns[siteLatIndex]),
+                                Double.parseDouble(columns[siteLonIndex]),
+                                sign*Double.parseDouble(columns[siteDepthIndex]),	true));
+        	if (siteOndateIndex >= 0)
+        		r.setOndate(Integer.parseInt(columns[siteOndateIndex]));
+        	else
+        		r.setOndate(-1);
+          newBucket.receivers.add(r);
+        }
 
         if (phaseIndex >= 0)
           newBucket.phases.add(SeismicPhase.valueOf(columns[phaseIndex]));

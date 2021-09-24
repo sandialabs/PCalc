@@ -1,3 +1,35 @@
+/**
+ * Copyright 2009 Sandia Corporation. Under the terms of Contract
+ * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government
+ * retains certain rights in this software.
+ * 
+ * BSD Open Source License.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of Sandia National Laboratories nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 package gov.sandia.gnem.dbtabledefs.nnsa_kb_core;
 
 import java.io.BufferedReader;
@@ -54,7 +86,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double sxx;
 
-  static final public double SXX_NA = -100000000;
+  static final public double SXX_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -69,7 +101,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double syy;
 
-  static final public double SYY_NA = -100000000;
+  static final public double SYY_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -84,7 +116,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double szz;
 
-  static final public double SZZ_NA = -100000000;
+  static final public double SZZ_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -99,7 +131,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double stt;
 
-  static final public double STT_NA = -100000000;
+  static final public double STT_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -114,7 +146,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double sxy;
 
-  static final public double SXY_NA = -100000000;
+  static final public double SXY_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -129,7 +161,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double sxz;
 
-  static final public double SXZ_NA = -100000000;
+  static final public double SXZ_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -144,7 +176,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double syz;
 
-  static final public double SYZ_NA = -100000000;
+  static final public double SYZ_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -159,7 +191,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double stx;
 
-  static final public double STX_NA = -100000000;
+  static final public double STX_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -174,7 +206,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double sty;
 
-  static final public double STY_NA = -100000000;
+  static final public double STY_NA = -9999999999.999;
 
   /**
    * <I>stt</I>, <I>stx</I>, <I>sty</I>, <I>stz</I>, <I>sxx</I>, <I>sxy</I>, <I>sxz</I>, <I>syy</I>,
@@ -189,7 +221,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double stz;
 
-  static final public double STZ_NA = -100000000;
+  static final public double STZ_NA = -9999999999.999;
 
   /**
    * Standard error of one observation. This column is derived from the discrepancies in the arrival
@@ -248,7 +280,7 @@ public class Origerr extends BaseRow implements Serializable {
    */
   private double sdepth;
 
-  static final public double SDEPTH_NA = -1;
+  static final public double SDEPTH_NA = -9999999999.999;
 
   /**
    * Origin time error. This column denotes the time uncertainty that accompanies the average error

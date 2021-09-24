@@ -1,3 +1,35 @@
+/**
+ * Copyright 2009 Sandia Corporation. Under the terms of Contract
+ * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government
+ * retains certain rights in this software.
+ * 
+ * BSD Open Source License.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of Sandia National Laboratories nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 package gov.sandia.gmp.pcalc;
 
 import java.io.BufferedWriter;
@@ -5,11 +37,9 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.Scanner;
-import java.util.TreeSet;
 
 import gov.sandia.geotess.GeoTessException;
 import gov.sandia.geotess.GeoTessModel;
@@ -29,7 +59,6 @@ import gov.sandia.gmp.baseobjects.interfaces.impl.PredictionRequest;
 import gov.sandia.gmp.bender.BenderConstants.LayerSide;
 import gov.sandia.gmp.bender.ray.RayInfo;
 import gov.sandia.gmp.predictorfactory.PredictorFactory;
-import gov.sandia.gmp.rayuncertainty.RayUncertainty;
 import gov.sandia.gmp.seismicbasedata.SeismicBaseData;
 import gov.sandia.gmp.util.containers.Tuple;
 import gov.sandia.gmp.util.containers.arraylist.ArrayListDouble;
@@ -37,6 +66,7 @@ import gov.sandia.gmp.util.containers.arraylist.ArrayListInt;
 import gov.sandia.gmp.util.exceptions.GMPException;
 import gov.sandia.gmp.util.globals.GMTFormat;
 import gov.sandia.gmp.util.globals.Globals;
+import gov.sandia.gmp.util.globals.Site;
 import gov.sandia.gmp.util.globals.Utils;
 import gov.sandia.gmp.util.logmanager.ScreenWriterOutput;
 
@@ -53,7 +83,7 @@ public class PCalc
 	 */
 	protected ArrayList<GeoAttributes> outputAttributes;
 
-	protected EnumSet<GeoAttributes> requestedAttributes;
+	protected EnumSet<GeoAttributes> predictionAttributes;
 
 	private GeoTessModel     geoTessModel;
 
@@ -83,7 +113,7 @@ public class PCalc
 		
 		// 3.3.0 2020-10-20
 		// Added ability to compute LibCorr3DModels populated
-		// with TT_DELTA_AK135 predictions.
+		// with TT_PATH_CORRECTION predictions.
 		//
 		// 3.2.0 2019-06-20
 		// Added ability to build a geotess model and 
@@ -151,13 +181,11 @@ public class PCalc
 				System.out.print(String.format("PCalc version %s   %s%n%n", 
 						PCalc.getVersion(), GMTFormat.localTime.format(new Date())));
 
-				System.out.println("PCalc dependencies:");
 				try {
-					System.out.println(Utils.getDependencyVersions());
+					// when running from an executable jar, this will print out all the
+					// dependencies with version numbers. Fails when run from an IDE.
+					System.out.printf("PCalc dependencies:%n%s%n%n", Utils.getDependencyVersions());
 				} catch (IOException e) {
-					for (String d : PCalc.getDependencies())
-						System.out.println(d);
-					System.out.println();
 				}
 
 				throw new GMPException(
@@ -229,7 +257,7 @@ public class PCalc
 					+ "because outputFile exists and  overwriteExistingOutputFile is false.%n%n",
 					properties.getFile("outputFile").getCanonicalPath());
 		else
-			new PCalc().run(properties);
+			new PCalc().run((PropertiesPlusGMP) properties.clone());
 	}
 
 	/**
@@ -283,15 +311,6 @@ public class PCalc
 		{
 			log.write(String.format("PCalc version %s   %s%n%n", 
 					PCalc.getVersion(), GMTFormat.localTime.format(new Date())));
-
-			log.writeln("PCalc dependencies:");
-			try {
-				log.writeln(Utils.getDependencyVersions());
-			} catch (IOException e) {
-				for (String d : PCalc.getDependencies())
-					log.writeln(d);
-				log.writeln();
-			}
 
 			log.write(String.format("Properties:%n%s%n", properties.toString()));
 		}
@@ -389,21 +408,25 @@ public class PCalc
 		// outputAttributes is what the user wants to get in the output but more 
 		// attributes may be needed to compute those.  Specify more attributes in 
 		// requestedAttributes, which is what the predictor will actually calculate.
-		requestedAttributes = EnumSet.copyOf(outputAttributes);
-		requestedAttributes.add(GeoAttributes.TT_SITE_CORRECTION);
-		requestedAttributes.add(GeoAttributes.TT_ELEVATION_CORRECTION);
-		requestedAttributes.add(GeoAttributes.TT_ELEVATION_CORRECTION_SOURCE);
-		requestedAttributes.add(GeoAttributes.TT_ELLIPTICITY_CORRECTION);
-		requestedAttributes.add(GeoAttributes.CALCULATION_TIME);
-		if (outputAttributes.contains(GeoAttributes.TT_DELTA_AK135))
-			requestedAttributes.add(GeoAttributes.TRAVEL_TIME);
+		predictionAttributes = EnumSet.copyOf(outputAttributes);
+		predictionAttributes.add(GeoAttributes.TT_SITE_CORRECTION);
+		predictionAttributes.add(GeoAttributes.TT_ELEVATION_CORRECTION);
+		predictionAttributes.add(GeoAttributes.TT_ELEVATION_CORRECTION_SOURCE);
+		predictionAttributes.add(GeoAttributes.TT_ELLIPTICITY_CORRECTION);
+		predictionAttributes.add(GeoAttributes.CALCULATION_TIME);
+		
+		// if user requests TT_PATH_CORRECTION and/or TT_DELTA_AK135
+		// must request TRAVEL_TIME
+		if (outputAttributes.contains(GeoAttributes.TT_PATH_CORRECTION)
+				|| outputAttributes.contains(GeoAttributes.TT_DELTA_AK135))
+			predictionAttributes.add(GeoAttributes.TRAVEL_TIME);
 
 		// load predictors and models
 
 		if (properties.getProperty("predictors") == null)
 			throw new GMPException("\n\nProperty 'predictors' is not specified");
 		
-		predictors = new PredictorFactory(properties, "predictors");
+		predictors = new PredictorFactory(properties, "predictors", log);
 
 		if (log.isOutputOn())
 			log.write("Loading predictors and models...");
@@ -426,7 +449,8 @@ public class PCalc
 			log.writeln("Access to seismicBaseData failed at "+sbd+"\n");
 
 			if (predictors.isSupported(PredictorType.LOOKUP2D) 
-					|| outputAttributes.contains(GeoAttributes.TT_DELTA_AK135))
+					|| outputAttributes.contains(GeoAttributes.TT_PATH_CORRECTION)
+				|| outputAttributes.contains(GeoAttributes.TT_DELTA_AK135))
 				throw new Exception(String.format("Cannot find seismicBaseData(%s)", sbd));
 		}
 
@@ -485,7 +509,7 @@ public class PCalc
 									receiver,
 									source, 
 									phase, 
-									requestedAttributes, 
+									predictionAttributes, 
 									true));					
 						}
 					}
@@ -526,7 +550,7 @@ public class PCalc
 									receiver, 
 									source, 
 									phase, 
-									requestedAttributes, 
+									predictionAttributes, 
 									true));					
 						}
 					}
@@ -592,7 +616,7 @@ public class PCalc
 									receiver, 
 									source, 
 									phase, 
-									requestedAttributes, 
+									predictionAttributes, 
 									true));					
 						}
 					}
@@ -610,7 +634,7 @@ public class PCalc
 								new Source(dataBucket.points.get(i), 
 										dataBucket.time.get(dataBucket.time.size()==1 ? 0 : i)), 
 								dataBucket.phases.get(dataBucket.phases.size()==1 ? 0 : i), 
-								requestedAttributes, 
+								predictionAttributes, 
 								true));	
 				}
 
@@ -620,6 +644,22 @@ public class PCalc
 				long t = System.currentTimeMillis();
 
 				ArrayList<PredictionInterface> predictions = predictors.computePredictions(parallelMode);
+				
+				// if user requested tt_delta_ak135 the predictor will compute tt_path_correction but
+				// not tt_delta_ak135.  As far as libcorr3d is concerned, they are the same thing so 
+				// just copy tt_path_correction into tt_delta_ak135
+				if (outputAttributes.contains(GeoAttributes.TT_DELTA_AK135) 
+						&& predictionAttributes.contains(GeoAttributes.TT_PATH_CORRECTION))
+				{
+					for (PredictionInterface prediction : predictions)
+					{
+						double ttpathcorr = prediction.getAttribute(GeoAttributes.TT_PATH_CORRECTION);
+						
+						if (ttpathcorr != Globals.NA_VALUE && 
+								prediction.getAttribute(GeoAttributes.TT_DELTA_AK135) == Globals.NA_VALUE)
+							prediction.setAttribute(GeoAttributes.TT_DELTA_AK135, ttpathcorr);
+					}
+				}
 
 				if (log.isOutputOn())
 				{
@@ -658,15 +698,22 @@ public class PCalc
 					dataBucket.modelValues = new double[nPoints*nDepths][outputAttributes.size()+1];
 					dataBucket.rayTypes = new RayType[nPoints*nDepths];
 
-					if (outputAttributes.contains(GeoAttributes.TT_DELTA_AK135))
+					// see if user requested tt_delta_ak135 or tt_path_corrections
+					int ttid = Math.max(outputAttributes.indexOf(GeoAttributes.TT_PATH_CORRECTION),
+							outputAttributes.indexOf(GeoAttributes.TT_DELTA_AK135));
+					
+					if (properties.getProperty("predictors", "").contains("lookup2d")
+							&& properties.getProperty("lookup2dPathCorrectionsType", "").toLowerCase().contains("libcorr"))
+						ttid = -1;
+					
+					if (ttid >= 0)
 					{
 						t = System.currentTimeMillis();
-						// the predictions contain computed travel times, not tt_delta_ak135
+						// the predictions contain computed travel times, not TT_PATH_CORRECTION
 						// we need to compute ak135 travel times and subtract them from 
 						// predicted travel times.
 						PredictorFactory ak135Predictor = new PredictorFactory();
 
-						int ttid = outputAttributes.indexOf(GeoAttributes.TT_DELTA_AK135);
 						int i,j, n=0;
 						double tt, ttak135;
 						int nRays=0, nValid=0;
@@ -1138,6 +1185,8 @@ public class PCalc
 			// sta, ondate, offdate, lat, lon, elev, "staname" (in quotes),
 			// statype, refsta, dnorth, deast.
 			
+			if (siteString.contains("\t"))
+				site = new Site(siteString.split("\t"));
 			site = new Site(new Scanner(siteString));
 		}
 		catch (Exception ex)
@@ -1539,19 +1588,6 @@ public class PCalc
 		}
 		position.setRadius(originalRadius);
 		return profile;
-	}
-
-	static public Collection<String> getDependencies()
-	{
-		Collection<String> dependencies = new TreeSet<>();
-		addDependencies(dependencies);
-		return dependencies;
-	}
-
-	static private void addDependencies(Collection<String> dependencies)
-	{
-		dependencies.add("PCalc "+getVersion());
-		RayUncertainty.addDependencies(dependencies);
 	}
 
 }

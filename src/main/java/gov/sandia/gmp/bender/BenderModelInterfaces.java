@@ -1,3 +1,35 @@
+/**
+ * Copyright 2009 Sandia Corporation. Under the terms of Contract
+ * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government
+ * retains certain rights in this software.
+ * 
+ * BSD Open Source License.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of Sandia National Laboratories nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 package gov.sandia.gmp.bender;
 
 import java.io.IOException;
@@ -146,48 +178,44 @@ public class BenderModelInterfaces {
 			
 			String[] names = Globals.getTokens(token, "\t ,");
 			if (names.length != 2) {
-				throw new IOException(Globals.NL + "Error: Property "
+				throw new IOException("\nError: Property "
 						+ "benderModelLayerToEarthInterfaceMap = \""
-								+ modelInterfaceRemapProperty + "\"" + Globals.NL +
-								"       Expects two entries per remap separated by \";\""
-								+ Globals.NL + "       (e.g. "
+								+ modelInterfaceRemapProperty + "\"\n"
+								+ "       Expects two entries per remap separated by \";\"\n"
+								+ "       (e.g. "
 								+ "\" modelLayer1 earthInterface1; modelLayer2 earthInterface2\")"
-								+ " ..." + Globals.NL);
+								+ " ...\n");
 			}
 
 			// test the model layer name to ensure it is contained by the model.
 			
 			if (md.getLayerIndex(names[0].toUpperCase()) == -1) {
-				throw new IOException(Globals.NL + "Error: GeoTessModel layer name \"" + names[0]
-						+ "\" read from Property" + Globals.NL
-						+ "       benderModelLayerToEarthInterfaceMap = \""
-						+ modelInterfaceRemapProperty + "\"" + Globals.NL
-						+ "       is not defined in the input GeoTessModel layer entries ..."
-						+ Globals.NL);
+				throw new IOException("\nError: GeoTessModel layer name \"" + names[0]
+						+ "\" read from Property\n       benderModelLayerToEarthInterfaceMap = \""
+						+ modelInterfaceRemapProperty + "\"\n"
+						+ "       is not defined in the input GeoTessModel layer entries ...\n");
 			}
 
 			// now test the model layer name to ensure it is not already a valid or mapped
 			// EarthInterface name.
 
 			if (EarthInterface.isValidMappedEarthInterfaceName(names[0])) {
-				throw new IOException(Globals.NL + "Error: GeoTessModel layer name \"" + names[0]
-						+ "\" read from Property" + Globals.NL
-						+ "       benderModelLayerToEarthInterfaceMap = \""
-						+ modelInterfaceRemapProperty + "\"" + Globals.NL
+				throw new IOException("\nError: GeoTessModel layer name \"" + names[0]
+						+ "\" read from Property\n       benderModelLayerToEarthInterfaceMap = \""
+						+ modelInterfaceRemapProperty + "\"\n"
 						+ "       is a valid EarthInterface specification and does "
-						+ "not need remapping ..." + Globals.NL);
+						+ "not need remapping ...\n");
 			}
 
 			// finally, test the EarthInterface name to which the model layer name is to be mapped
 			// and verify it is a valid or commonly mapped EarthInterface name.
 			
 			if (!EarthInterface.isValidMappedEarthInterfaceName(names[1])) {
-				throw new IOException(Globals.NL + "Error: EarthInterface name \"" + names[1]
-						+ "\" read from Property" + Globals.NL
+				throw new IOException("\nError: EarthInterface name \"" + names[1]
+						+ "\" read from Property\n"
 						+ "       benderModelLayerToEarthInterfaceMap = \""
-						+ modelInterfaceRemapProperty + "\"" + Globals.NL
-						+ "       is not a defined EarthInterface entry as required ..."
-						+ Globals.NL);
+						+ modelInterfaceRemapProperty + "\"\n"
+						+ "       is not a defined EarthInterface entry as required ...\n");
 			}
 
 			// valid model name to EarthInterface name remap ... add it to the map
@@ -228,10 +256,17 @@ public class BenderModelInterfaces {
 			// EarthInterface::commonInterfaceNameMap entry.
 			if (EarthInterface.isValidMappedEarthInterfaceName(layerName)) {
 				
-				// entry is defined in EarthInterface. Set the fields and continue to the next
-				// layer name
+				// entry is defined in EarthInterface. Throw an error if the interface is defined
+				// twice. Otherwise, set the fields and continue to the next layer name
 				
 				String validInterfaceName = EarthInterface.getValidMappedEarthInterfaceName(layerName);
+				if (modelValidInterfaceNameIndexMap.get(validInterfaceName) != null) {
+					throw new IOException("\nError: EarthInterface name \""
+							+ validInterfaceName + "\" cannot be defined twice\n"
+							+ "       (layer interface # " 
+							+ modelValidInterfaceNameIndexMap.get(validInterfaceName) + " and # "
+							+ i + " ...\n");
+				}
 				modelValidInterfaceNameIndexMap.put(validInterfaceName, i);
 				modelLayerNameIndexMap.put(layerName,  i);
 				modelValidInterfaces[i] = EarthInterface.getValidMappedEarthInterface(layerName);
@@ -243,10 +278,18 @@ public class BenderModelInterfaces {
 				if ((benderInstanceInterfaceNameMap != null) &&
 						benderInstanceInterfaceNameMap.containsKey(layerName)) {
 					
-					// entry is mapped in this bender instance interface map. Set the fields and
-					// continue to the next layer name
+					// entry is mapped in this bender instance interface map. Throw an error if
+					// the interface is defined twice. Otherwise, set the fields and continue
+					// to the next layer name
 					
 					String validInterfaceName = benderInstanceInterfaceNameMap.get(layerName);
+					if (modelValidInterfaceNameIndexMap.get(validInterfaceName) != null) {
+						throw new IOException("\nError: EarthInterface name \""
+								+ validInterfaceName + "\" cannot be defined twice\n"
+								+ "       (layer interface # " 
+								+ modelValidInterfaceNameIndexMap.get(validInterfaceName) + " and # "
+								+ i + " ...\n");
+					}
 					modelValidInterfaceNameIndexMap.put(validInterfaceName, i);
 					modelLayerNameIndexMap.put(layerName,  i);
 					modelValidInterfaces[i] = EarthInterface.getValidMappedEarthInterface(validInterfaceName);
@@ -254,13 +297,13 @@ public class BenderModelInterfaces {
 					
 					// entry was not defined in bender instance interface map. Throw an error.
 					
-					throw new IOException(Globals.NL + "Error: GeoTessModel layer name \"" + layerName
-							+ "\" (layer index = " + i + ") is not a valid EarthInterface name,"
-							+ Globals.NL + "       and has not been mapped to a valid EarthInterface"
-							+ " name ..." + Globals.NL + "       Use bender property "
-							+ "\"benderModelLayerToEarthInterfaceMap\"" + Globals.NL
+					throw new IOException("\nError: GeoTessModel layer name \"" + layerName
+							+ "\" (layer index = " + i + ") is not a valid EarthInterface name,\n"
+							+ "       and has not been mapped to a valid EarthInterface"
+							+ " name ...\n       Use bender property "
+							+ "\"benderModelLayerToEarthInterfaceMap\"\n"
 							+ "       to map the model layer name to a valid EarthInterface"
-							+ " name ..." + Globals.NL);
+							+ " name ...\n");
 				}
 			}
 		}
@@ -271,10 +314,9 @@ public class BenderModelInterfaces {
 		try {
 			EarthInterface.validateInterfaceOrder(modelValidInterfaces);	
 		} catch (Exception ex) {
-			throw new IOException(Globals.NL + "Error: The ordering of the Bender input GeoTessModel"
-					+ " layers were found" + Globals.NL
-					+ "       to be invalid relative to the EarthInterface ordering:"
-					+ Globals.NL + Globals.NL + ex.getMessage() + Globals.NL);
+			throw new IOException("\nError: The ordering of the Bender input GeoTessModel"
+					+ " layers were found\n       to be invalid relative to the "
+					+ "EarthInterface ordering: \n\n" + ex.getMessage() + "\n");
 		}
 	}
 
@@ -297,15 +339,13 @@ public class BenderModelInterfaces {
 		// Test to ensure that a "CRUST" and "MANTLE" group are defined
 		
 		if (!interfaceGroupTopMap.containsKey(EarthInterfaceGroup.CRUST)) {
-			throw new IOException(Globals.NL + "Error: Input GeoTessModel does not contain"
-					+ " an interface assigned to the EarthInterfaceGroup \"CRUST\" grouping,"
-					+ Globals.NL + "       which is necessary to properly" 
-					+ " execute any phase in Bender ..." + Globals.NL);
+			throw new IOException("\nError: Input GeoTessModel does not contain"
+					+ " an interface assigned to the EarthInterfaceGroup \"CRUST\" grouping,\n"
+					+ "       which is necessary to properly execute any phase in Bender ...\n");
 		} else if (!interfaceGroupTopMap.containsKey(EarthInterfaceGroup.MANTLE)) {
-			throw new IOException(Globals.NL + "Error: Input GeoTessModel does not contain"
-					+ " an interface assigned to the EarthInterfaceGroup \"MANTLE\" grouping,"
-					+ Globals.NL + "       which is necessary to properly" 
-					+ " execute any phase in Bender ..." + Globals.NL);
+			throw new IOException("\nError: Input GeoTessModel does not contain"
+					+ " an interface assigned to the EarthInterfaceGroup \"MANTLE\" grouping,\n"
+					+ "       which is necessary to properly execute any phase in Bender ...\n");
 		}
 	}
 

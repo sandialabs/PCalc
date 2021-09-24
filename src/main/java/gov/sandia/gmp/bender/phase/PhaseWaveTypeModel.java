@@ -1,3 +1,35 @@
+/**
+ * Copyright 2009 Sandia Corporation. Under the terms of Contract
+ * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government
+ * retains certain rights in this software.
+ * 
+ * BSD Open Source License.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of Sandia National Laboratories nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 package gov.sandia.gmp.bender.phase;
 
 import java.io.IOException;
@@ -8,6 +40,7 @@ import gov.sandia.geotess.GeoTessMetaData;
 import gov.sandia.gmp.baseobjects.globals.EarthInterface;
 import gov.sandia.gmp.baseobjects.globals.SeismicPhase;
 import gov.sandia.gmp.bender.BenderModelInterfaces;
+import gov.sandia.gmp.util.containers.Tuple;
 import gov.sandia.gmp.util.containers.arraylist.ArrayListInt;
 import gov.sandia.gmp.util.globals.Globals;
 
@@ -28,8 +61,7 @@ import gov.sandia.gmp.util.globals.Globals;
 public class PhaseWaveTypeModel
 {
 	/**
-	 * The GeoTessModel metadata object from which this wavetype interface
-	 * conversion specification was created.
+	 * The GeoTessModel metadata object used to output slowness attribute names.
 	 */
 	private GeoTessMetaData   metaData = null;
 
@@ -69,73 +101,53 @@ public class PhaseWaveTypeModel
 	 * @param sp The input seismic phase.
 	 * @throws IOException
 	 */
-	public PhaseWaveTypeModel(GeoTessMetaData md, SeismicPhase sp, BenderModelInterfaces benderModelInterfaces,
-			HashMap<EarthInterface, EarthInterface> phaseModelInterfaceRemap) throws IOException {
+	public PhaseWaveTypeModel(GeoTessMetaData md, SeismicPhase sp,
+			BenderModelInterfaces benderModelInterfaces,
+			ArrayList<Tuple<EarthInterface, Integer>> waveSpeedInterfaceChngList)
+					throws IOException {
 
-		// set the meta data object and seismic phase
+		// set the metaData (output use only) and seismic phase
 
 		metaData = md;
 		seismicPhase = sp;
 
-		// extract the ray interface wave type entries from the seismic phase ...
-		// create the interface and index lists
+		// get valid interface names for the assigned GeoTessModel
 
-		String[] entries = sp.getRayInterfaceWaveTypeList().split(",");
-		for (int i = 0; i < entries.length; ++i)
-			entries[i] = entries[i].trim();
+		HashMap<String, Integer> validInterfaceNames = 
+				benderModelInterfaces.getValidInterfaceNameIndexMap();
 
-		waveSpeedInterfaceNameList = new ArrayList<String>(entries.length / 2 + 1);
-		waveSpeedInterfaceIndxList = new ArrayListInt(entries.length / 2 + 1);
-		waveSpeedAttributeIndxList = new ArrayListInt(entries.length / 2 + 1);
+		// initialize the interface name, interface index, and slowness attribute index lists
+		
+		waveSpeedInterfaceNameList = new ArrayList<String>(waveSpeedInterfaceChngList.size() + 1);
+		waveSpeedInterfaceIndxList = new ArrayListInt(waveSpeedInterfaceChngList.size() + 1);
+		waveSpeedAttributeIndxList = new ArrayListInt(waveSpeedInterfaceChngList.size() + 1);
 
 		// The first entry is simply the "SOURCE" associated with the first
 		// slowness type index
 
+		int waveSpeedAttrIndex = waveSpeedInterfaceChngList.get(0).second;
 		waveSpeedInterfaceNameList.add("SOURCE");
 		waveSpeedInterfaceIndxList.add(-1);
-		int waveSpeedIndx = metaData.getAttributeIndex(entries[0]);
-		if (waveSpeedIndx == -1)
-			throw new IOException("Error: Invalid model wave speed name \"" + entries[0] + "\" ...");
-		else
-			waveSpeedAttributeIndxList.add(metaData.getAttributeIndex(entries[0]));
+		waveSpeedAttributeIndxList.add(waveSpeedAttrIndex);
 
-		// loop over all remaining entry pairs (Interface --> Slowness) and
-		// assign them to their respective lists
-		HashMap<String, Integer> eiMap = benderModelInterfaces.getValidInterfaceNameIndexMap();
-		for (int i = 1; i < entries.length; i += 2) {
-			// validate layer name and assign to waveSpeedInterfaceList
+		// loop over all interface changes and add their contents to their respective lists
 
-			// see if any EarthInterface names in the phase specification require
-			// re-mapping (e.g. "SURFACE" is used for free surface reflections but an
-			// ak135 model may only have "UPPER_CRUST_TOP" as it's free surface
-			// definition. In this case the map has "SURFACE" -> "UPPER_CRUST_TOP"
+		for (int i = 1; i < waveSpeedInterfaceChngList.size(); i++) {
 
-			EarthInterface rmap = phaseModelInterfaceRemap.get(EarthInterface.valueOf(entries[i]));
-			if (rmap != null)
-				entries[i] = rmap.name();
-
-			int layerIndex = eiMap.get(entries[i]);
-			if (layerIndex == -1)
-				throw new IOException("Error: Model interface layer name \"" + entries[i] + "\" is invalid ...");
-			else {
-				waveSpeedInterfaceNameList.add(entries[i]);
-				waveSpeedInterfaceIndxList.add(layerIndex);
-			}
-
-			waveSpeedIndx = metaData.getAttributeIndex(entries[i + 1]);
-			if (waveSpeedIndx == -1)
-				throw new IOException("Error: Invalid model wave speed name \"" + entries[i + 1] + "\" ...");
-			else
-				waveSpeedAttributeIndxList.add(metaData.getAttributeIndex(entries[i + 1]));
+			waveSpeedAttrIndex = waveSpeedInterfaceChngList.get(i).second;
+			String interfaceName = waveSpeedInterfaceChngList.get(i).first.name();
+			waveSpeedInterfaceNameList.add(interfaceName);
+			waveSpeedInterfaceIndxList.add(validInterfaceNames.get(interfaceName));
+			waveSpeedAttributeIndxList.add(waveSpeedAttrIndex);
 		}
 
 		// add the Receiver as a final entry with the last stored wave speed
 
 		waveSpeedInterfaceNameList.add("RECEIVER");
 		waveSpeedInterfaceIndxList.add(-1);
-		waveSpeedAttributeIndxList.add(metaData.getAttributeIndex(entries[entries.length - 1]));
+		waveSpeedAttributeIndxList.add(waveSpeedAttrIndex);
 	}
-	
+
 	public int size()
 	{
 		return waveSpeedInterfaceNameList.size() - 2;
@@ -171,15 +183,15 @@ public class PhaseWaveTypeModel
 		return waveSpeedAttributeIndxList.get(i);
 	}
 
-	/**
-	 * Returns the metadata object used to create this wave type conversion model.
-	 *  
-	 * @return The metadata object used to create this wave type conversion model.
-	 */
-	public GeoTessMetaData getMetaData()
-	{
-		return metaData;
-	}
+//	/**
+//	 * Returns the metadata object used to create this wave type conversion model.
+//	 *  
+//	 * @return The metadata object used to create this wave type conversion model.
+//	 */
+//	public GeoTessMetaData getMetaData()
+//	{
+//		return metaData;
+//	}
 	
 	/**
 	 * Returns the seismic phase object used to create this wave type conversion model.

@@ -1,3 +1,35 @@
+/**
+ * Copyright 2009 Sandia Corporation. Under the terms of Contract
+ * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government
+ * retains certain rights in this software.
+ * 
+ * BSD Open Source License.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *    * Redistributions of source code must retain the above copyright notice,
+ *      this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of Sandia National Laboratories nor the names of its
+ *      contributors may be used to endorse or promote products derived from
+ *      this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 package gov.sandia.gmp.bender;
 
 import static java.lang.Math.PI;
@@ -11,11 +43,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -27,13 +57,13 @@ import gov.sandia.geotess.GeoTessPosition;
 import gov.sandia.geotess.GradientCalculator;
 import gov.sandia.geotess.extensions.siteterms.GeoTessModelSiteData;
 import gov.sandia.gmp.baseobjects.AttributeIndexerSmart;
-import gov.sandia.gmp.baseobjects.BaseObjects;
 import gov.sandia.gmp.baseobjects.EllipticityCorrections;
 import gov.sandia.gmp.baseobjects.PropertiesPlusGMP;
 import gov.sandia.gmp.baseobjects.Receiver;
 import gov.sandia.gmp.baseobjects.Source;
 import gov.sandia.gmp.baseobjects.geovector.GeoVector;
 import gov.sandia.gmp.baseobjects.globals.EarthInterface;
+import gov.sandia.gmp.baseobjects.globals.EarthInterfaceGroup;
 import gov.sandia.gmp.baseobjects.globals.GeoAttributes;
 import gov.sandia.gmp.baseobjects.globals.RayType;
 import gov.sandia.gmp.baseobjects.globals.SeismicPhase;
@@ -60,6 +90,7 @@ import gov.sandia.gmp.bender.ray.RayInfo;
 import gov.sandia.gmp.bender.ray.RaySegment;
 import gov.sandia.gmp.bender.ray.RaySegmentBottom;
 import gov.sandia.gmp.util.changenotifier.ChangeNotifier;
+import gov.sandia.gmp.util.containers.Tuple;
 import gov.sandia.gmp.util.exceptions.GMPException;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.globals.Utils;
@@ -198,6 +229,23 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 //	{
 //		return bouncePointIgnoreSnellsLawLayers.contains(layer);
 //	}
+
+	public class PhaseLayerChange {
+		public ArrayList<Tuple<RayDirection, EarthInterface>> rayBrnchDirChngList;
+		public ArrayList<Tuple<EarthInterface, Integer>> waveSpeedInterfaceChngList;
+		
+		public PhaseLayerChange() {
+			this.rayBrnchDirChngList = new ArrayList<Tuple<RayDirection, EarthInterface>>();
+			this.waveSpeedInterfaceChngList = new ArrayList<Tuple<EarthInterface, Integer>>();
+		}
+	}
+	
+	/**
+	 * Map of seisimic phase to PhaseLayerChange object. Used to avoid doing this more than once for
+	 * each phase.
+	 */
+	private HashMap<SeismicPhase, PhaseLayerChange> phaseLayerChange =
+			new HashMap<SeismicPhase, PhaseLayerChange>(); 
 
 	/**
 	 * The model interfaces validation object that validates the layer
@@ -604,7 +652,7 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 	{
 		return phaseWaveTypeModel;
 	}
-
+	
 	/**
 	 * Map from station name to boolean.  This map overrides the setting of
 	 * useTTSiteCorrections.  if a station appears in this list with value 
@@ -691,8 +739,6 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 				"benderGradientCalculator", "PRECOMPUTED").toUpperCase());
 
 		setGradientCalculator(gradientCalculatorMode);
-		
-		addPhaseInterface2ModelInterfaceRemapProperties(properties);
 		
 		useTTSiteCorrections = properties.getBoolean(
 				"benderUseTTSiteCorrections", true);
@@ -997,86 +1043,577 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 	 * @return RayInfo[]
 	 */
 
-  /**
-   * A map that associates phase interface boundary definitions with some other
-   * EarthInterface defined in the GeoTessModel.
-   * 
-   * Not all GeoTessModels use the EarthInterface specifications in a
-   * comprehensive manner. The Earth model may only contain a subset of the
-   * EarthInterface layers and/or may use other names for the same layer
-   * definitions instead of those defined in EarthInterface. If other names are
-   * used they can be mapped to valid EarthInterface names using the method
-   * EarthInterface.addInterfaceNameRemap(modelInterfaceName, earthInterfaceNam).
-   * 
-   * However, the interface names defined in the Earth model, even after
-   * re-mapping to valid EarthInterface names, may not include the EarthInterface
-   * name that specific phases use in their definition. For example, under-side
-   * reflection phases (e.g. PP, SS, pP, sS, etc.) define their bounce point
-   * as reflecting off of EarthInterface.SURFACE. If SURFACE is not defined
-   * in the GeoTessModel then it must be mapped to a new interface that is
-   * defined in the model for Bender to work properly. The purpose of this map
-   * is to store the phase interface definition associated with an existing
-   * GeoTessModel interface.
-   */
-  protected HashMap<EarthInterface, EarthInterface> phaseInterfaceToModelInterfaceRemap =
-  		new HashMap<EarthInterface, EarthInterface>();
   
-  /**
-   * Remaps an EarthInterface used to define a specific phase to another
-   * EarthInterface defined in the GeoTessModel used by Bender. For example
-   * SURFACE -> UPPER_CRUST_TOP replaces any phase definitions that use SURFACE
-   * with the interface UPPER_CRUST_TOP.
-   * 
-   * @param phaseInterfaceDefinition The existing interface used by SeismicPhase
-   *                                 interface definitions that will be replaced
-   *                                 with the model interface definition.
-   * @param modelInterfaceDefinition The model interface definition that will
-   * 																 replace the existing phase interface
-   * 																 definition.
-   */
-  public void addPhaseInterface2ModelInterfaceRemap(EarthInterface phaseInterfaceDefinition,
-  																									EarthInterface modelInterfaceDefinition)
-  {
-  	phaseInterfaceToModelInterfaceRemap.put(phaseInterfaceDefinition,
-  																								 modelInterfaceDefinition);
-  }
-
-  /**
-   * Reads the property "phaseInterfaceToModelInterfaceRemap" from the input
-   * properties object and adds all defined mappings to the phaseInterfaceToModelInterfaceRemap
-   * map.
-   * 
-   * @param properties The properties file from which phase interface
-   * 									 definitions will be mapped to existing model interface
-   * 									 names.
-   * @throws IOException
-   */
-  private void addPhaseInterface2ModelInterfaceRemapProperties(PropertiesPlusGMP properties)
-					throws IOException
-	{
-  	String interfaceRemap = properties.getProperty("benderPhaseInterfaceToModelInterfaceRemap");
-  	if (interfaceRemap != null)
-  	{
-      String[] tokens = interfaceRemap.split(";");
-      for (String token : tokens)
-      {
-        String[] interfaceNames = Globals.getTokens(token, "\t ,");
-        if (interfaceNames.length != 2)
-        	throw new IOException("Error: Underside Reflection Interface Remap " +
-        												"requires two interface names ... Found: " +
-        			 									"\"" + token + "\" ...");
-        addPhaseInterface2ModelInterfaceRemap(EarthInterface.valueOf(interfaceNames[0]),
-        																					EarthInterface.valueOf(interfaceNames[1]));
-      }
-  	}
+	private void setCurrentRayConvergenceCriteria(SeismicPhase phase) {
+		currentRayConvgncCriteria = phaseSpecificConvgncCriteria.get(phase);
+		if (currentRayConvgncCriteria == null)
+			currentRayConvgncCriteria = defaultConvgncCriteria;
 	}
 
-  private void setCurrentRayConvergenceCriteria(SeismicPhase phase)
-  {
-  	currentRayConvgncCriteria = phaseSpecificConvgncCriteria.get(phase);
-  	if (currentRayConvgncCriteria == null)
-  		currentRayConvgncCriteria = defaultConvgncCriteria;
-  }
+	/**
+	 * Validate the input SeismicPhase (sp) ray branch change list. The GeoTessModel
+	 * assigned to Bender for purposes of ray-tracing the input phase may not define
+	 * the interfaces at which the ray changes direction. These direction changes
+	 * can be of three types including: TOP_SIDE_REFLECTION, BOTTOM_SIDE_REFLECTION,
+	 * and BOTTOM, the last of which corresponds to a refracting ray whose bottom
+	 * represents a direction change. The reflections can occur at specific
+	 * interfaces, while the "BOTTOM" change refers to the deepest layer at which a
+	 * ray bottoms and becomes an up-going ray. If one or more of these interfaces
+	 * are not supported in the current model, then alternate valid interfaces that
+	 * work as well are attempted to be discovered. If no valid alternate is found,
+	 * then this method throws an exception, as the assigned GeoTessModel cannot
+	 * support the phase. If a valid alternate is found then the interface is
+	 * re-mapped to the alternate and a log message is output to indicate that an
+	 * interface re-mapping has occurred.
+	 * <p>
+	 * If the phase direction change prescription is a "BOTTOM" refraction and its
+	 * prescribed deepest layer is not defined in the assigned GeoTessModel, then we
+	 * find the closest layer definition above, that is still in the same
+	 * EarthInterfaceGroup as the layer assigned to "BOTTOM" and use it as the
+	 * deepest layer for refraction.
+	 * <p>
+	 * If the phase prescription is a TOP_SIDE_REFLECTION, which are usually defined
+	 * at major interfaces within the Earth layer structure, then we require that
+	 * the requested interface be defined. Otherwise an error is thrown.
+	 * <p>
+	 * Lastly, for a BOTOM_SIDE_REFLECTION we first check to see if the ray
+	 * direction change interface is defined as "FREE_SURFACE". If so then we assign
+	 * the direction change interface to the top-most CRUST interface defined by the
+	 * model. Otherwise, if the interface is not "FREE_SURFACE", and is NOT a valid
+	 * EarthInterface defined by the assigned GeoTessModel, then we perform a
+	 * validation as follows:
+	 * 
+	 * If the requested interface is in the MANTLE or CORE, we throw an error. Deep
+	 * BOTOM_SIDE_REFLECTION interfaces must be defined for Bender to function
+	 * properly.
+	 * 
+	 * Similarly, if the requested layer is an undefined water interface, we also
+	 * throw an error.
+	 * 
+	 * Finally, if the undefined interface is in the crust, then we find the next
+	 * closest interface above the requested interface that still belongs to the
+	 * CRUST group. If one above is not defined then we assign the interface to the
+	 * very top crust interface that is defined, which will be the closest to the
+	 * requested interface.
+	 * 
+	 * @param sp                  The SeismicPhase whose ray branch direction change
+	 *                            list is checked for validity.
+	 * @param rayBrnchDirChngList The output list of tuple pairs (<RayDirection,
+	 *                            EarthInterface >) for each ray direction change
+	 *                            assigned to this phase (cleared on entry).
+	 * @throws IOException
+	 */
+	private void checkPhaseRayBranchDirectionChangeInterfaceRemap(SeismicPhase sp,
+			ArrayList<Tuple<RayDirection, EarthInterface>> rayBrnchDirChngList) throws IOException {
+
+		// get valid interface names for the assigned GeoTessModel
+
+		HashMap<String, Integer> validInterfaceNames = 
+				benderModelInterfaces.getValidInterfaceNameIndexMap();
+		
+		// clear the list and make a pair element to store the matching
+		// RayDirection -> EarthInterface objects. Loop over all phase branch list pairs
+		
+		rayBrnchDirChngList.clear();
+		Tuple<RayDirection, EarthInterface> dirChngEntry;
+		String[] entries = sp.getRayBranchList().split(",");
+		for (int i = 0; i < entries.length; i += 2) {
+			entries[i] = entries[i].trim();
+			entries[i+1] = entries[i+1].trim();
+			
+			// phase prescriptions for bottom refractions, and top and bottom reflections, define
+			// specific EarthInterface names for their occurrence. However, not all input models will
+			// define those interfaces. If the phase prescription is a "BOTTOM" refraction and its
+			// deepest layer is not defined, then we find the closest layer definition above, that is
+			// still in the same EarthInterfaceGroup as the layer assigned to "BOTTOM" and use it as
+			// the deepest layer for refraction.
+			//
+			// If the phase prescription is a TOP_SIDE_REFLECTION, which are usually defined at
+			// major interfaces within the Earth layer structure, then we require that the
+			// requested interface be defined. Otherwise an error is thrown.
+			//
+			// Lastly, for a BOTOM_SIDE_REFLECTION we first check to see if the requested interface
+			// is given as "FREE_SURFACE". If so, then we map the requested surface to the top-most
+			// CRUST interface defined by the model. If the requested interface is not "FREE_SURFACE",
+			// and is not a valid EarthInterface defined by the asssigned GeoTessModel, then we
+			// attempt to discover a valid alternative as follows: First, if the requested interface is in the MANTLE or
+			// CORE we throw an error. Deep BOTOM_SIDE_REFLECTION interfaces
+			// must be defined for Bender to function properly. Similarly, if the requested layer is
+			// an undefined water interface, we also throw an error. Finally, if the undefined
+			// interface is in the crust, then we find the next closest interface above the requested
+			// interface that still belongs to the CRUST group. If one above is not defined then we 
+			// assign the interface to the very top crust interface that is defined, which will be
+			// the closest to the requested interface.
+			
+			// Summary of if-else structure below:
+			// if bottom reflection and requested interface is FREE_SURFACE then map to top crust interface (M)
+			// else if bottom reflection and requested interface is not defined,
+			//    if requested interface is at or below MOHO, then throw error (E)
+			//    else if requested interface is in crust, then map to next defined crust layer above interface, or top crust interface if none are above. (M)
+			//    else if requested interface is in water, then throw error (E)
+			// if top reflection interface is not defined then throw error (E)
+			// if bottom refraction layer is not defined, then map to closest interface above requested interface in group, or throw error if none. (M, E)
+
+			EarthInterface rmap = null;
+			int remapCase = -1;
+			if (entries[i].equalsIgnoreCase("BOTTOM_SIDE_REFLECTION")) {
+				// The ray direction change is a BOTTOM_SIDE_REFLECTION: test for FREE_SURFACE
+				
+				if (entries[i+1].equalsIgnoreCase("FREE_SURFACE")) {
+					// Is FREE_SURFACE. Map to top most crust interface
+					
+					rmap = benderModelInterfaces.getModelValidInterfaces()
+							[benderModelInterfaces.getTopMostEarthInterface(EarthInterfaceGroup.CRUST)];
+					remapCase = 1;
+				} else if (!validInterfaceNames.containsKey(entries[i+1])) {
+					// not FREE_SURFACE and interface is not defined. check to see if interface
+					// is the MOHO or lower
+					
+					if (EarthInterface.valueOf(entries[i+1]).ordinal() <=
+							EarthInterface.MOHO.ordinal()) {
+						// interface is <= MOHO and must be defined. Throw error.
+						
+						throw new IOException("\nError: Phase \"" + sp.name()
+						+ "\" with ray direction change \"" + entries[i]
+						+ "\", and an associated EarthInterface specification \""
+						+ entries[i + 1] + "\",\n       is not defined in the current "
+						+ "input model. Bender requires all MANTLE or CORE phase "
+						+ "\n       " + entries[i] + " to be defined in the input"
+						+ " GeoTessModel for proper ray tracing execution ...\n");
+
+					} else if (EarthInterface.valueOf(entries[i+1]).getInterfaceGroup() ==
+							EarthInterfaceGroup.CRUST) {
+						// interface is above MOHO, and is a member of the CRUST group.
+						// find the lowest defined layer above the requested
+						// interface within the CRUST group.
+						
+						rmap = EarthInterface.findLowestDefinedLayerAboveInGroup(entries[i + 1], validInterfaceNames);
+						remapCase = 2;
+						if (rmap == null) {
+							// No interface in the CRUST group lies above the 
+							// requested interface entries[i+1], so map to the
+							// top most crust interface.
+							
+							rmap = benderModelInterfaces.getModelValidInterfaces()
+									[benderModelInterfaces.getTopMostEarthInterface(EarthInterfaceGroup.CRUST)];
+							remapCase = 3;
+						}
+					} else {
+						// interface entries[i+1] must be in the water group. But the
+						// requested interface does not exist so throw error.
+						
+						throw new IOException("\nError: Phase \"" + sp.name()
+						+ "\" with ray direction change \"" + entries[i]
+						+ "\", and an associated EarthInterface specification \""
+						+ entries[i + 1] + "\",\n       is not defined in the current "
+						+ "input model. Bender requires all WATER phase "
+						+ "\n       " + entries[i] + " interfaces to be defined in the input"
+						+ " GeoTessModel for proper ray tracing execution ...\n");
+
+					}
+				} else {
+					// requested interface is defined ... assign to rmap
+					
+					rmap = EarthInterface.valueOf(entries[i+1]);
+				}
+			}
+			else if (entries[i].equalsIgnoreCase("TOP_SIDE_REFLECTION")) {
+				// The ray direction change is a TOP_SIDE_REFLECTION: test for interface existence
+				
+				if (!validInterfaceNames.containsKey(entries[i+1]))
+					// interface does not exist. throw an error
+					
+					throw new IOException("\nError: Phase \"" + sp.name()
+					+ "\" with ray direction change \"" + entries[i]
+					+ "\", and an associated EarthInterface specification \""
+					+ entries[i + 1] + "\",\n       is not defined in the current "
+					+ "input model. Bender requires all " + entries[i]
+					+ "\n       interfaces to be defined in the input GeoTessModel"
+					+ " for proper ray tracing execution ...\n");
+				
+				else
+					// requested interface is defined ... assign to rmap
+					
+					rmap = EarthInterface.valueOf(entries[i+1]);
+			}
+			else if (entries[i].equalsIgnoreCase("BOTTOM")) {
+				// The ray direction change is a BOTTOM (a refraction): test for interface existence
+				
+				if (!validInterfaceNames.containsKey(entries[i+1])) {
+					// interface does not exist. find the lowest defined layer above the
+					// interface within the interface group.
+
+					rmap = EarthInterface.findLowestDefinedLayerAboveInGroup(entries[i + 1], validInterfaceNames);
+					remapCase = 4;
+					if (rmap == null)
+						// No interface in the interface group lies above the interface entries[i+1],
+						// throw an error
+						throw new IOException("\nError: Phase \"" + sp.name()
+						+ "\" with ray direction change \"" + entries[i]
+						+ "\", and an associated EarthInterface specification \""
+						+ entries[i + 1] + "\",\n       is not defined in the current "
+						+ "input model. no valid model interface within the same \n       " 
+						+ "EarthInterfaceGroup (\""
+						+ EarthInterface.valueOf(entries[i+1]).getInterfaceGroup().name()
+						+ "\" was found that could be mapped as an alternative \n       "
+						+ "for this seismic phase using the input GeoTessModel ...\n");
+				}
+				else
+					// requested interface is defined ... assign to rmap
+					
+					rmap = EarthInterface.valueOf(entries[i+1]);
+			}
+			
+			// test that the direction change interface specification is defined. If it is not defined
+			// and no valid interface could be mapped to the direction change then throw an error.
+			// Given the if-else structure above this should never happen. The rmap==null error
+			// message is just a precaution.
+			
+			// If rmap is defined but is different than the requested interface (a re-map),
+			// then log a message and set the new re-mapped interface.
+			
+			if (rmap == null) {
+				
+				// the ray direction change interface is not defined in the model, and no valid
+				// interface could be mapped. Throw an exception.
+				
+				throw new IOException("\nError: Phase \"" + sp.name()
+						+ "\" with ray direction change \"" + entries[i]
+						+ "\", and an associated EarthInterface specification \""
+						+ entries[i + 1] + "\",\n       is not defined in the current "
+						+ "input model. Additionally, no valid model interface within "
+						+ "the same EarthInterfaceGroup (\""
+						+ EarthInterface.valueOf(entries[i+1]).getInterfaceGroup().name()
+						+ "\")\n       was found that could be mapped as an alternative "
+						+ "for this seismic phase using the input GeoTessModel ...\n");
+			} else if (!entries[i+1].equalsIgnoreCase(rmap.name())) {
+				
+				// a ray direction change interface was re-mapped. Log and output the layer re-map
+				// for this phase
+				
+				String s = "\nThe input phase \"" + sp.name() + "\""
+						+ " with ray direction change \"" + entries[i]
+						+ "\",\n" + "and an associated EarthInterface specification \""
+						+ entries[i + 1] + "\",\n" + "has been remapped to layer \""
+						+ rmap.name() + "\".\n\n";
+				switch (remapCase) {
+				case 1:
+					s += "This is the top most EarthInterface that is defined in the\n"
+					   + "CRUST by the assigned GeoTessModel ...\n";
+					break;
+				case 2:
+					s += "This is the closest \"" + rmap.getInterfaceGroup().name() + "\" group interface defined "
+					   + "in the input\nGeoTessModel that lies above the requested EarthInterface ...\n";
+					break;
+				case 3:
+					s += "No interface in the CRUST group was discovered above the requested interface,\n"
+					   + "so the requested interface was mapped to the top most CRUST group interface\n"
+					   + "defined in the GeoTessModel ...";
+					break;
+				case 4:
+					s += "This is the closest \"" + rmap.getInterfaceGroup().name() + "\" group interface defined "
+							   + "in the input\nGeoTessModel that lies above the requested EarthInterface ...\n";
+					break;
+				default:
+				
+				}
+
+				// log the message
+				
+				print(s);
+				
+				// assign re-mapped name to entries[i+ 1]
+				
+				entries[i + 1] = rmap.name();
+			}
+
+			// add next ray branch direction change and EarthInterface to the output list.
+			
+			RayDirection rayBrnchDirChngType = RayDirection.valueOf(entries[i]);
+			dirChngEntry = new Tuple<RayDirection, EarthInterface>(rayBrnchDirChngType,
+					EarthInterface.valueOf(entries[i + 1]));
+			rayBrnchDirChngList.add(dirChngEntry);
+
+		}
+	}
+	
+	/**
+	 * Validate the input SeismicPhase (sp) wave speed type change list. The
+	 * GeoTessModel assigned to Bender for purposes of ray-tracing the input phase
+	 * may not define the interfaces at which the ray changes wave speed type (P to
+	 * S or S to P).
+	 * 
+	 * This method first validates the requested wave speed change types (P or S) to
+	 * ensure they are defined by the assigned GeoTessModel. Next, it validates the
+	 * EarthInterfaces where the wave speed type changes. If the EarthInterface is
+	 * defined as "FREE_SURFACE" then the method maps the top-most CRUST interface
+	 * as the requested EarthInterface.
+	 * <p>
+	 * If the requested EarthInterface is not "FREE_SURFACE", and is NOT a valid
+	 * defined interface supported by the assigned GeoTessModel, then requested
+	 * interface is checked to see if it is a CRUST group EarthInterface. If NOT
+	 * then an error is thrown, as all non-CRUST requested interfaces must be
+	 * defined for Bender to function properly.
+	 * <p>
+	 * Finally,If the requested interface is not a valid defined interface, but is a
+	 * CRUST group interface, then the requested interface is mapped to first valid
+	 * interface that lies above the requested interface, that still resides in the
+	 * CRUST group. If no layer is found then the requested interface is mapped to
+	 * the top-most CRUST layer, which will be the closest layer to the requested
+	 * interface.
+	 * 
+	 * @param sp                         The SeismicPhase whose ray branch direction
+	 *                                   change list is checked for validity.
+	 * @param waveSpeedInterfaceChngList The output list of tuple pairs
+	 *                                   (<EarthInterface, Integer>) for each ray
+	 *                                   wave speed type change (P to S or S to P)
+	 *                                   assigned to this phase (cleared on entry).
+	 * 
+	 * @throws IOException
+	 */
+	private void checkPhaseWaveSpeedInterfaceRemap(SeismicPhase sp,
+		ArrayList<Tuple<EarthInterface, Integer>> waveSpeedInterfaceChngList) throws IOException {
+
+		// get valid interface names for the assigned GeoTessModel
+
+		HashMap<String, Integer> validInterfaceNames = 
+				benderModelInterfaces.getValidInterfaceNameIndexMap();
+		
+		// get the wave speed interface type list from the phase. Check the first
+		// wave speed entry to ensure it is defined in the assigned GeoTessModel
+		
+		String[] entries = sp.getRayInterfaceWaveTypeList().split(",");
+		entries[0] = entries[0].trim();
+		int waveSpeedIndx = this.geoTessModel.getMetaData().getAttributeIndex(entries[0]);
+		if (waveSpeedIndx == -1)
+			throw new IOException("\nError: The assigned Bender GeoTessModel does not support"
+					+ " the requested phase \"" + sp + "\" slowness attribute \""
+					+ entries[0] + "\" ...\n");
+
+		// make the temporary interface/wave speed index tuple and variable. Add the starting
+		// wave speed to the wave speed interface change list associated with a null interface
+		// (this is the starting slowness type at the source).
+		
+		Tuple<EarthInterface, Integer> wavSpdChngEntry;
+		EarthInterface interfaceWaveTypeChng = null;
+		wavSpdChngEntry = new Tuple<EarthInterface, Integer>(null, waveSpeedIndx);
+		waveSpeedInterfaceChngList.add(wavSpdChngEntry);
+		
+		// loop over all remaining entries, which if they exist, will be in pairs
+		// defining the EarthInterface and the new slowness type that changes when
+		// the ray crosses that interface.
+		
+		for (int i = 1; i < entries.length; i += 2) {
+			entries[i] = entries[i].trim();
+			entries[i+1] = entries[i+1].trim();
+
+			// first check the new slowness (entries[i+1]) to ensure it is an attribute of the
+			// assigned GeoTessModel. throw an error it it isn't supported.
+			
+			waveSpeedIndx = this.geoTessModel.getMetaData().getAttributeIndex(entries[i+1]);
+			if (waveSpeedIndx == -1)
+				throw new IOException("\nError: The assigned Bender GeoTessModel does not support"
+						+ " the requested phase \"" + sp + "\" slowness attribute \""
+						+ entries[i + 1] + "\" ...\n");
+			
+			// now check the interface where the wave speed changes type. First check for a
+			// "FREE_SURFACE" entry
+			
+			if (entries[i].equalsIgnoreCase("FREE_SURFACE")) {
+				
+				// "FREE_SURFACE". Map the interface to the top level CRUST interface
+			
+				interfaceWaveTypeChng = benderModelInterfaces.getModelValidInterfaces()
+						[benderModelInterfaces.getTopMostEarthInterface(EarthInterfaceGroup.CRUST)];
+				
+			} else if (!validInterfaceNames.containsKey(entries[i])) {
+				
+				// not FREE_SURFACE and requested interface is not defined. Check to see if
+				// interface is part of the CRUST
+				
+				if (EarthInterface.valueOf(entries[i]).getInterfaceGroup() !=
+						EarthInterfaceGroup.CRUST) {
+					
+					// interface is not in the CRUST so throw an error, as non-CRUST interaces
+					// must exist for proper Bender Execution.
+					
+					throw new IOException("\nError: Phase \"" + sp.name()
+					+ "\" with  wave speed EarthInterface change \"" + entries[i]
+					+ "\"\n       is not defined in the current "
+					+ "input model. Bender requires all WATER, MANTLE, or CORE phase "
+					+ "\n       wave speed change EarthInterfaces to be defined in the input"
+					+ " GeoTessModel for proper ray tracing execution ...\n");
+
+				} else {
+					
+					// interface is in the crust. map to next defined crust layer above interface,
+					// or the top crust interface if none are above.
+					
+					interfaceWaveTypeChng = EarthInterface.findLowestDefinedLayerAboveInGroup(
+							entries[i], validInterfaceNames);
+					if (interfaceWaveTypeChng == null) {
+						
+						// No interface in the CRUST group lies above the 
+						// requested interface entries[i], so map to the
+						// top most crust interface.
+						
+						interfaceWaveTypeChng = benderModelInterfaces.getModelValidInterfaces()
+								[benderModelInterfaces.getTopMostEarthInterface(EarthInterfaceGroup.CRUST)];
+					}
+				}
+				
+			}
+
+			// check to see if the requested interface has been re-mapped. If so, then log the
+			// change in the Bender log file .
+			
+			if (!interfaceWaveTypeChng.name().equalsIgnoreCase(entries[i])) {
+				
+				// a ray direction change interface was re-mapped. Log and output the layer re-map
+				// for this phase
+				
+				String s = "\nThe input phase \"" + sp.name() + "\""
+						+ " with wave speed EarthInterface change \"" + entries[i]
+						+ "\",\n" + "has been remapped to layer \""
+						+ interfaceWaveTypeChng.name() + "\".\n\n"
+						+ "This is the closest interface defined "
+						+ "in the input GeoTessModel ...\n\n";
+
+				// log the message
+				
+				print(s);
+				
+				// assign re-mapped name to entries[i]
+				
+				entries[i] = interfaceWaveTypeChng.name();
+			}
+			
+			// save the wave speed and the interface where the wave speed changes in the list
+			// and continue to the next entry pair, if any.
+			
+			wavSpdChngEntry = new Tuple<EarthInterface, Integer>(interfaceWaveTypeChng, waveSpeedIndx);
+			waveSpeedInterfaceChngList.add(wavSpdChngEntry);
+  		}
+	}
+	
+	/**
+	 * Validates that the input SeismicPhase (sp) is supported by the assigned GeoTessModel.
+	 * By definition all crustal phases are supported by the model, which is validated when
+	 * the BenderModelInterfaces object is constructed. This includes a definition for the
+	 * MOHO layer. However, phases requiring a water or ice layer, or phases whose rays
+	 * penetrate the mantle or core have not been validated. This is done here in this method.
+	 * 
+	 * @param sp                  The SeismicPhase whose model support is validated.
+	 * @param rayBrnchDirChngList The list of tuple pairs (<RayDirection,
+	 *                            EarthInterface >) for each ray direction change
+	 *                            assigned to this phase.
+	 * @throws IOException
+	 */
+	private void checkPhaseModelSupport(SeismicPhase sp,
+			ArrayList<Tuple<RayDirection, EarthInterface>> rayBrnchDirChngList) throws IOException {
+
+		// loop over all ray branch direction changes for this phase
+
+		for (int i = 0; i < rayBrnchDirChngList.size(); ++i) {
+
+			// get the ray direction and the interface/layer assigned to it
+
+			RayDirection rayDirection = rayBrnchDirChngList.get(i).first;
+			EarthInterface earthInterface = rayBrnchDirChngList.get(i).second;
+
+			// jump to the EarthInterfaceGroup for this interface
+
+			switch (earthInterface.getInterfaceGroup()) {
+			case WATER:
+				// just check to make sure a water or ice layer was defined to properly handle
+				// water phases
+
+				if (!benderModelInterfaces.isEarthInterfaceGroupDefined(EarthInterfaceGroup.WATER)) {
+					throw new IOException("\nError: A water layer (WATER or ICE) must be defined in "
+							+ "the assigned GeoTessModel to properly support this phase (" + sp + ") ...\n");
+				}
+				break;
+			case CRUST:
+				// just return here as the construction of the BenderModelInterfaces object
+				// required that a valid CRUST layer be defined along with the definition of
+				// the MOHO
+
+				break;
+			case MANTLE:
+				// Interface group is MANTLE. if this is a top side reflection and the interface
+				// is below the MOHO, or if this is a bottom refraction or bottom side reflection,
+				// then the CMB is required by the model for Bender to perform proper ray tracing.
+				// If the CMB is not defined throw an error.
+				if ((rayDirection == RayDirection.TOP_SIDE_REFLECTION)
+						&& (earthInterface.ordinal() < EarthInterface.MOHO.ordinal())
+						&& !benderModelInterfaces.isValidInterfaceNameContained(earthInterface.name())) {
+					throw new IOException("\nError: The \"" + earthInterface.name() 
+							+ "\" must be defined in the assigned GeoTessModel to properly "
+							+ "support the TOP_SIDE_REFLECTION for this phase (" + sp + ") ...\n");
+				} else if ((rayDirection == RayDirection.BOTTOM_SIDE_REFLECTION)
+						|| (rayDirection == RayDirection.BOTTOM)) {
+					if (!benderModelInterfaces.isValidInterfaceNameContained(EarthInterface.CMB.name()))
+						throw new IOException("\nError: The CMB must be defined in the assigned "
+								+ "GeoTessModel to properly support this phase (" + sp + ") ...\n"
+								+ "       Phases whose rays penetrate below the MOHO cannot be"
+								+ " processed properly without a defined CMB ...\n");
+				}
+				break;
+			case CORE:
+				// Interface group is CORE. if this is a top side reflection and the interface
+				// is below the CMB, or if this is a bottom refraction or bottom side reflection,
+				// then both the CMB and ICB are required by the model for Bender to perform
+				// proper ray tracing. If one or both are not defined then throw an error.
+
+				// first check CMB which must be defined for any core phase
+
+				if (!benderModelInterfaces.isValidInterfaceNameContained(EarthInterface.CMB.name()))
+					throw new IOException("\nError: The CMB must be defined in the assigned "
+							+ "GeoTessModel to properly support a core phase (" + sp + ") ...\n");
+
+				// next check for rays that penetrate the CMB. If they do then the ICB must be
+				// defined
+				if ((rayDirection == RayDirection.TOP_SIDE_REFLECTION)
+						&& (earthInterface == EarthInterface.ICB)
+						&& !benderModelInterfaces.isValidInterfaceNameContained("ICB")) {
+					throw new IOException("\nError: The \"ICB\" must be defined in the "
+							+ "assigned GeoTessModel to properly support the "
+							+ "TOP_SIDE_REFLECTION for this phase (" + sp + ") ...\n");
+				} else if ((rayDirection == RayDirection.BOTTOM_SIDE_REFLECTION)
+						|| (rayDirection == RayDirection.BOTTOM)) {
+					if (!benderModelInterfaces.isValidInterfaceNameContained(EarthInterface.ICB.name()))
+						throw new IOException("\nError: The ICB must be defined in the assigned "
+								+ "GeoTessModel to properly support this phase (" + sp + ") ...\n"
+								+ "       Phases whose rays penetrate below the CMB cannot be"
+								+ " processed properly without a defined ICB ...\n");
+				}
+				break;
+			default:
+				// can't get here, but throw an error just-in-case
+
+				throw new IOException("\nError: The NOT_DEFINED EarthInterfaceGroup was encountered "
+				+ "for phase ("	+ sp + ") ...\n");
+			}
+		}
+	}
+	
+	private PhaseLayerChange getPhaseLayerChange(SeismicPhase phase) throws IOException {
+		
+		PhaseLayerChange phaseLayerChangeEntry = phaseLayerChange.get(phase); 
+		if (phaseLayerChangeEntry == null) {
+			phaseLayerChangeEntry = new PhaseLayerChange();
+			phaseLayerChange.put(phase, phaseLayerChangeEntry);
+
+			// validate the phase branch direction and wave speed interface changes. also ensure
+			// that the model supports the interfaces required by the phase
+			
+			checkPhaseRayBranchDirectionChangeInterfaceRemap(phase, phaseLayerChangeEntry.rayBrnchDirChngList);
+			checkPhaseWaveSpeedInterfaceRemap(phase, phaseLayerChangeEntry.waveSpeedInterfaceChngList);
+			checkPhaseModelSupport(phase, phaseLayerChangeEntry.rayBrnchDirChngList);
+		}
+		
+		return phaseLayerChangeEntry;
+	}
 
 	public RayInfo[] computeFastRays(PredictionRequestInterface request) throws GMPException
 	{
@@ -1092,7 +1629,6 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 			timeToAbort = calcOriginTime + maxEllapsedTime;
 		else
 			timeToAbort = Long.MAX_VALUE;
-
 		GeoVector source = request.getSource().getPosition();
 		GeoVector receiver = request.getReceiver().getPosition();
 
@@ -1101,23 +1637,21 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 
 		// buffer to accumulate error messages from caught exceptions. These
 		// will be added to the RayInfo object that is returned by this method.
+		
 		errorMessages = new StringBuffer();
 
-		//Phase phase = null;
-		//int layer = -1;
-		//String layerName = "";
-
+		// make sure the phase ray branch list and wave speed interface list are defined.
+		
 		if (request.getPhase().getRayBranchList() == null)
 			return new RayInfo[] { new RayInfo(request, this,
-														"Seismic Phase Ray Branch List for " +
-														request.getPhase().name() +
-														" was Not Defined") };
+					"\nError: Seismic Phase Ray Branch List for "
+					+ request.getPhase().name() + " was Not Defined ...\n") };
 
 		if (request.getPhase().getRayInterfaceWaveTypeList() == null)
-			return new RayInfo[] { new RayInfo(request, this,
-														"Seismic Phase Ray Wave Type Interface Conversion List for " +
-														request.getPhase().name() +
-														" was Not Defined") };
+			return new RayInfo[] {
+					new RayInfo(request, this,
+							"\n Error: Seismic Phase Ray Wave Type Interface Conversion List for "
+							+ request.getPhase().name() + " was Not Defined ...\n") };
 
 		setCurrentRayConvergenceCriteria(request.getPhase());
 		try
@@ -1131,15 +1665,24 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 			currentReceiverProfile.set(receiver.getUnitVector(),  receiver.getRadius());
 			sourceToReceiverDistance = currentSourceProfile.distanceDegrees(currentReceiverProfile);
 
+			GeoTessPosition depthProfile = GeoTessPosition.getGeoTessPosition(geoTessModel);
+			depthProfile.set(receiver.getUnitVector(),  receiver.getRadius());
+			depthProfile.setIntermediatePosition(currentSourceProfile , currentReceiverProfile, 0.5);
+			depthProfile.setRadius(depthProfile.getEarthRadius());
+
+			// create the phase ray branch direction change list and wave speed interface branch
+			// change list. This call also validates any remappings if they occur.
+			
+			PhaseLayerChange plc = getPhaseLayerChange(request.getPhase());
+			
 			// make the phase ray branch and wave type models
-
-			phaseRayBranchModel = new PhaseRayBranchModel(getGeoTessModel(), request.getPhase(),
-					benderModelInterfaces, phaseInterfaceToModelInterfaceRemap,
-					sourceToReceiverDistance, phaseLayerLevelThickness);
+			
+			phaseRayBranchModel = new PhaseRayBranchModel(depthProfile, request.getPhase(),
+					benderModelInterfaces, plc.rayBrnchDirChngList, sourceToReceiverDistance, phaseLayerLevelThickness);
 			phaseWaveTypeModel = new PhaseWaveTypeModel(getGeoTessModel().getMetaData(),
-					request.getPhase(), benderModelInterfaces, phaseInterfaceToModelInterfaceRemap);
+					request.getPhase(), benderModelInterfaces, plc.waveSpeedInterfaceChngList);
 
-			// check co positional source/receiver rays
+			// check co-positional source/receiver rays
 
 			String phasename = request.getPhase().name();
 			if (currentSourceProfile.getDistance3D(currentReceiverProfile) == 0.0)
@@ -1283,26 +1826,27 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 								double d = gtp.getDistance3D(currentSourceProfile);
 								if (d < .02)
 								{
-									if ((request.getPhase() == SeismicPhase.pP) ||
-											(request.getPhase() == SeismicPhase.sP))
+									if (request.getPhase() == SeismicPhase.pP)
 									{
-										phaseRayBranchModel = new PhaseRayBranchModel(getGeoTessModel(),
+										plc = this.getPhaseLayerChange(SeismicPhase.P);
+										phaseRayBranchModel = new PhaseRayBranchModel(depthProfile,
 												SeismicPhase.P, benderModelInterfaces,
-												phaseInterfaceToModelInterfaceRemap, sourceToReceiverDistance,
+												plc.rayBrnchDirChngList, sourceToReceiverDistance,
 												phaseLayerLevelThickness);
 										phaseWaveTypeModel = new PhaseWaveTypeModel(
 												getGeoTessModel().getMetaData(), SeismicPhase.P,
-												benderModelInterfaces, phaseInterfaceToModelInterfaceRemap);
+												benderModelInterfaces, plc.waveSpeedInterfaceChngList);
 									}
-									else
+									else if (request.getPhase() == SeismicPhase.sP)
 									{
-										phaseRayBranchModel = new PhaseRayBranchModel(getGeoTessModel(),
+										plc = this.getPhaseLayerChange(SeismicPhase.S);
+										phaseRayBranchModel = new PhaseRayBranchModel(depthProfile,
 												SeismicPhase.S, benderModelInterfaces,
-												phaseInterfaceToModelInterfaceRemap,
-												sourceToReceiverDistance, phaseLayerLevelThickness);
+												plc.rayBrnchDirChngList, sourceToReceiverDistance,
+												phaseLayerLevelThickness);
 										phaseWaveTypeModel = new PhaseWaveTypeModel(getGeoTessModel().getMetaData(),
 												SeismicPhase.S,benderModelInterfaces,
-												phaseInterfaceToModelInterfaceRemap);
+												plc.waveSpeedInterfaceChngList);
 									}
 
 									fastRay = new Ray(this, currentReceiverProfile, currentSourceProfile, true);
@@ -6198,47 +6742,27 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 	public static PropertiesPlusGMP getBenderProperties(PropertiesPlus properties)
 	{
 		PropertiesPlusGMP benderProps = new PropertiesPlusGMP();
-		
-    copyProperties(benderProps, properties,
-				 					 "predictors");
-		copyProperties(benderProps, properties,
-									 "benderPhaseInterfaceToModelInterfaceRemap");
-		copyProperties(benderProps, properties,
-						 			 "predictorVerbosity");
-		copyProperties(benderProps, properties,
-						 			 "benderGradientCalculator");
-		copyProperties(benderProps, properties,
-						 			 "benderUseTTSiteCorrections");
-		copyProperties(benderProps, properties,
-						 			 "benderUseTTSiteCorrectionsTrue");
-		copyProperties(benderProps, properties,
-						 			 "benderUseTTSiteCorrectionsFalse");
-		copyProperties(benderProps, properties,
-						 			 "benderTetSize");
-		copyProperties(benderProps, properties,
-									 "benderEllipticityCorrectionsDirectory");
-		copyProperties(benderProps, properties,
-						 			 "benderAllowCMBDiffraction");
-		copyProperties(benderProps, properties,
-						 			 "benderAllowMOHODiffraction");
-		copyProperties(benderProps, properties,
-						 			 "benderTTModelUncertaintyScale");
-		copyProperties(benderProps, properties,
-						 			 "benderDefaultTravelTimeTolerance");
-		copyProperties(benderProps, properties,
-						 			 "benderDefaultMinimumNodeSpacing");
-		copyProperties(benderProps, properties,
-	 			 					 "benderDefaultConvergenceCriteria");
-		copyProperties(benderProps, properties,
-					 				 "benderPhaseSpecificConvergenceCriteria");
-		copyProperties(benderProps, properties,
-				 					 "benderPhaseLevelThickness");
-		copyProperties(benderProps, properties,
-						 			 "benderSearchMethod");
-		copyProperties(benderProps, properties,
-						 			 "benderMaxCalcTime");
-		copyProperties(benderProps, properties,
-				"benderModel");
+
+		copyProperties(benderProps, properties, "predictors");
+		copyProperties(benderProps, properties, "benderModelLayerToEarthInterfaceMap");
+		copyProperties(benderProps, properties, "predictorVerbosity");
+		copyProperties(benderProps, properties, "benderGradientCalculator");
+		copyProperties(benderProps, properties, "benderUseTTSiteCorrections");
+		copyProperties(benderProps, properties, "benderUseTTSiteCorrectionsTrue");
+		copyProperties(benderProps, properties, "benderUseTTSiteCorrectionsFalse");
+		copyProperties(benderProps, properties, "benderTetSize");
+		copyProperties(benderProps, properties, "benderEllipticityCorrectionsDirectory");
+		copyProperties(benderProps, properties, "benderAllowCMBDiffraction");
+		copyProperties(benderProps, properties, "benderAllowMOHODiffraction");
+		copyProperties(benderProps, properties, "benderTTModelUncertaintyScale");
+		copyProperties(benderProps, properties, "benderDefaultTravelTimeTolerance");
+		copyProperties(benderProps, properties, "benderDefaultMinimumNodeSpacing");
+		copyProperties(benderProps, properties, "benderDefaultConvergenceCriteria");
+		copyProperties(benderProps, properties, "benderPhaseSpecificConvergenceCriteria");
+		copyProperties(benderProps, properties, "benderPhaseLevelThickness");
+		copyProperties(benderProps, properties, "benderSearchMethod");
+		copyProperties(benderProps, properties, "benderMaxCalcTime");
+		copyProperties(benderProps, properties, "benderModel");
 
 		return benderProps;
 	}
@@ -6283,18 +6807,4 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 	@Override
 	protected double getDshDr() { throw new UnsupportedOperationException(); }
 
-	static public Collection<String> getDependencies()
-	{
-		Collection<String> dependencies = new LinkedHashSet<>();
-		addDependencies(dependencies);
-		return dependencies;
-	}
-	
-	static public void addDependencies(Collection<String> dependencies)
-	{
-		dependencies.add("Bender "+getVersion());
-		BaseObjects.addDependencies(dependencies);
-	}
-	
-	
 }
