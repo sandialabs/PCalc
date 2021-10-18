@@ -3891,7 +3891,7 @@ public class RayUncertainty {
     }
 
     /**
-     * Sets the uncertainty output writer when the source definition is DATABASE
+     * Sets the variance output writer when the source definition is DATABASE
      * or PROPERTIESFILE.
      *
      * @throws IOException
@@ -3906,7 +3906,7 @@ public class RayUncertainty {
                 aSourceDefinition != SourceDefinition.GEOTESSMODEL)) {
             // create writer and output header
 
-            s = aIODirectory + File.separator + "uncertainty.txt";
+            s = aIODirectory + File.separator + "variance.txt";
             aUncOut = new BufferedWriter(new FileWriter(s));
             aUncOut.write("Uncertainty Output File" + NL);
             aUncOut.write(Globals.getTimeStamp() + NL + NL);
@@ -3946,11 +3946,15 @@ public class RayUncertainty {
             // output ray partial variance header
 
             //  StaA  (StaB)    Src Id    Total      Diag.   Off-Diag. Non-Rep.  RepFrctn
+            //                           (sec^2)    (sec^2)   (sec^2)  (sec^2)     (#)
             // SSSSSS(SSSSSS)  ********  ###.####  ###.####  ###.####  ###.####  ###.####
             // SSSSSS          ********  ###.####  ###.####  ###.####  ###.####  ###.####
+            aUncOut.write("Observation Variance Table" + NL + NL);
             aUncOut.write("Observation Count " + aObservationList.size() + NL + NL);
             aUncOut.write(" StaA  (StaB)     Src Id     ");
             aUncOut.write("Total      Diag.   Off-Diag. Non-Rep.  RepFrctn" + NL);
+            aUncOut.write("                            ");
+            aUncOut.write("(sec^2)    (sec^2)   (sec^2)  (sec^2)     (#)" + NL);
         }
     }
 

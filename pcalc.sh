@@ -4,7 +4,7 @@
 # PATH=$PATH:<path to directory where this file resides>
 
 # the location of the pcalc jar file on the users system.
-pcalc_jar=/Users/$USER/github/PCalc/target/pcalc-3.2.3-jar-with-dependencies.jar
+pcalc_jar=/Users/$USER/github/PCalc/target/pcalc-3.2.4-jar-with-dependencies.jar
 
 # oracle's ojbdc jar file, which is required to access an oracle database.  
 # This file is not delivered with pcalc.  Users must locate this file on their sytem and

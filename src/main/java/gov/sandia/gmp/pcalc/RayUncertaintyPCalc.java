@@ -43,6 +43,7 @@ import gov.sandia.gmp.rayuncertainty.RayUncertainty;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.globals.Site;
 import gov.sandia.gmp.util.propertiesplus.PropertiesPlus;
+import gov.sandia.gmp.util.propertiesplus.PropertiesPlusException;
 
 public class RayUncertaintyPCalc {
 	
@@ -61,11 +62,27 @@ public class RayUncertaintyPCalc {
 		
 		extractUncertaintyValues(properties, pcalc, dataBucket);
 		
-		// delete the ray uncertainty properties file (created by buildPropertyFile method).
-		deleteFile(properties.getFile("propertiesFileName"));
+		try {
+			// delete the temporary ray uncertainty work directory. Try 10 times.
+			File ioDir = properties.getFile("ioDirectory");
+			for (int i=0; i<10; ++i)
+			{
+				Thread.sleep(500);
+				deleteFile(ioDir);
+				Thread.sleep(500);
+				if (!ioDir.exists())
+					break;
+			}
+		} catch (Exception e) {
+			pcalc.log.writeln(e);
+		}
 		
-		// delete the temporary ray uncertainty work directory
-		deleteFile(properties.getFile("ioDirectory"));
+		try {
+			// delete the ray uncertainty properties file (created by buildPropertyFile method).
+			properties.getFile("propertiesFileName").delete();
+		} catch (Exception e) {
+			pcalc.log.writeln(e);
+		}
 		
 		if (pcalc.log.getVerbosity() >= 1)
 			pcalc.log.writef("Computing RayUncertainties completed in %s%n%n", Globals.elapsedTime(timer));
@@ -82,9 +99,9 @@ public class RayUncertaintyPCalc {
 		
 		// copy uncertainty results from the uncertainty.txt file to the dataBucket.modelVallues array
 		int idx = pcalc.outputAttributes.indexOf(GeoAttributes.TT_MODEL_UNCERTAINTY)+1;
-		input = new Scanner(new File(ioDirectory, "uncertainty.txt"));
+		input = new Scanner(new File(ioDirectory, "variance.txt"));
 		String line = input.nextLine();
-		while (!line.trim().startsWith("StaA"))
+		while (!line.trim().startsWith("(sec^2)"))
 			line = input.nextLine();
 		int count = 0;
 		while (input.hasNext())
@@ -93,7 +110,7 @@ public class RayUncertaintyPCalc {
 			++count;
 			Scanner in = new Scanner(line);
 			in.next(); // ignore sta 
-			dataBucket.modelValues[in.nextInt()][idx] = in.nextDouble();
+			dataBucket.modelValues[in.nextInt()][idx] = Math.sqrt(in.nextDouble());
 			in.close();
 		}
 		input.close();

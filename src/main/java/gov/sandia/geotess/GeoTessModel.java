@@ -3357,7 +3357,7 @@ public class GeoTessModel
 			throws IOException
 	{
 		try {
-			testTestModelIntegrity();
+			testModelIntegrity();
 		} catch (GeoTessException e) {
 			throw new IOException(e);
 		}
@@ -3493,7 +3493,7 @@ public class GeoTessModel
 			throws IOException
 	{
 		try {
-			testTestModelIntegrity();
+			testModelIntegrity();
 		} catch (GeoTessException e) {
 			throw new IOException(e);
 		}
@@ -3521,7 +3521,7 @@ public class GeoTessModel
 	 * 
 	 * @throws GeoTessException
 	 */
-	public void testTestModelIntegrity() throws GeoTessException
+	public void testModelIntegrity() throws GeoTessException
 	{
 		ProfileType ptype = profiles[0][0].getType();
 		boolean isSurface = ptype == ProfileType.SURFACE || ptype == ProfileType.SURFACE_EMPTY;
@@ -3559,7 +3559,7 @@ public class GeoTessModel
 											layer,
 											p[layer].getRadiusBottom(),
 											dr));
-				else if (Math.abs(dr) > 0.0)
+				else if (Math.abs(dr) > 0.)
 				{
 					// repair any missmatch that is less than 0.01 km
 					int up = layer;
@@ -3626,7 +3626,7 @@ public class GeoTessModel
 							String.format(
 									"%nAt vertex %d the radius at top of layer %d is %1.3f %n"
 											+ "and the radius at the bottom of layer %d is %1.3f.  They "
-											+ "differ by %1.3f",
+											+ "differ by %1.6f",
 											vertex,
 											layer - 1,
 											p[layer - 1].getRadiusTop(),

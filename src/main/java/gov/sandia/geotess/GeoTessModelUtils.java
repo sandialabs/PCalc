@@ -3261,6 +3261,46 @@ public class GeoTessModelUtils
 			throw new IOException(e);
 		}
 	}
+	
+	/**
+	 * Generate a map of the size of the triangles in a grid. This size of the
+	 * triangles is the edgelength of an equilateral triangle with the same
+	 * area, in degrees.
+	 * <p>
+	 * Also generates another file that contains the outlines of the continents
+	 * plotted on the same map projection. The file is located in the same
+	 * directory as the outputFile, with the name 'continents_centerLon_%d.vtk'
+	 * where %d is replaced with the longitude of the center of the map rounded
+	 * to the nearest degree.
+	 * 
+	 * @param grid
+	 *            the grid to be plotted.
+	 * @param outputFile
+	 *            the name of the file to which to write the output. Must end
+	 *            with extension 'vtk'.
+	 * @param centerLonDegrees
+	 *            the longitude of the center of the map in degrees.
+	 * @throws IOException
+	 * @throws GeoTessException
+	 */
+	static public void vtkRobinsonTriangleSize(GeoTessGrid grid,
+			String outputFile, double centerLonDegrees)
+					throws Exception
+	{
+		if (grid.getNTessellations() == 1 && !outputFile.contains("%d"))
+			vtkRobinsonTriangleSize(grid, new File(outputFile), centerLonDegrees, 0);
+		else
+		{
+			if (!outputFile.contains("%d"))
+				throw new Exception("outputFile must contain substring '%d', which will "
+						+ "be replaced with the tessellation index");
+			for (int tessid=0; tessid < grid.getNTessellations(); ++tessid)
+			{
+				vtkRobinsonTriangleSize(grid, new File(String.format(outputFile, tessid)), 
+						centerLonDegrees, tessid);
+			}
+		}
+	}
 
 	/**
 	 * Generate a map of the size of the triangles in a grid. This size of the
@@ -3292,6 +3332,9 @@ public class GeoTessModelUtils
 		if (!outputFile.getName().endsWith(".vtk"))
 			throw new IOException("outputFile " + outputFile
 					+ " must end with .vtk");
+		
+		if (outputFile.getName().contains("%d"))
+			outputFile = new File(String.format(outputFile.getAbsolutePath(), tessId));
 
 		int level = grid.getNLevels(tessId) - 1;
 
@@ -3319,7 +3362,7 @@ public class GeoTessModelUtils
 		ArrayList<Point> vertices = new ArrayList<Point>(grid.getNVertices());
 		ArrayList<int[]> iCells = new ArrayList<int[]>(grid.getNTriangles(
 				tessId, level));
-
+		
 		DataOutputStream output = new DataOutputStream(
 				new BufferedOutputStream(new FileOutputStream(outputFile)));
 

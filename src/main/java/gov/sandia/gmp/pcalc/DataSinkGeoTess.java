@@ -114,7 +114,11 @@ public class DataSinkGeoTess extends DataSink {
 			// Specify a description of the model.
 			d.append(String.format("%s containing model predictions computed by PCalc version %s%n", 
 					bucket.geotessModel.getMetaData().getModelClassName(), PCalc.getVersion()));
-			d.append("receiver = ").append(bucket.receivers.get(0).getSiteRow().toString()).append("\n");
+			try {
+				d.append("receiver = ").append(bucket.receivers.get(0).getSiteRow().toString()).append("\n");
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 			d.append("phase = ").append(bucket.phases.get(0).toString()).append("\n");
 
 			String predictor = properties.getProperty("predictors", "?");

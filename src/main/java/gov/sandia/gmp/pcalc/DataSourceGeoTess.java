@@ -50,6 +50,7 @@ import gov.sandia.gmp.baseobjects.geovector.GeoVector;
 import gov.sandia.gmp.baseobjects.globals.GeoAttributes;
 import gov.sandia.gmp.baseobjects.interfaces.ReceiverInterface;
 import gov.sandia.gmp.baseobjects.seismicitydepth.SeismicityDepthModel;
+import gov.sandia.gmp.util.containers.arraylist.ArrayListDouble;
 import gov.sandia.gmp.util.globals.DataType;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.numerical.polygon.Polygon;
@@ -76,6 +77,7 @@ public class DataSourceGeoTess extends DataSource
 
 		double depthSpacing = Double.NaN;
 		double[] depths = null;
+		boolean spanSeismicityDepth = false;
 
 		if (modelDimensions == 3)
 		{
@@ -97,21 +99,45 @@ public class DataSourceGeoTess extends DataSource
 				if (depthSpacing <= 0.)
 					throw new Exception(String.format("property geotessDepthSpacing = %1.3f but must be > 0. when geotessModelDimensions = 3",
 							depthSpacing));
-				// if property seismicityDepthModel is specified, then the seismicity depth model will be loaded from the
-				// the specified file.  If seismicityDepthModel is 'default', or is not specified, then the default model
-				// will be loaded from the internal resources directory.
-				seismicity_depth = SeismicityDepthModel.getGeoTessPosition(properties.getProperty("seismicityDepthModel", "default"));
+			}
+			
+			spanSeismicityDepth = properties.getBoolean("spanSeismicityDepth", true);
+			
+			// if property seismicityDepthModel is specified, then the seismicity depth model will be loaded from the
+			// the specified file.  If seismicityDepthModel is 'default', or is not specified, then the default model
+			// will be loaded from the internal resources directory.
+			seismicity_depth = SeismicityDepthModel.getGeoTessPosition(properties.getProperty("seismicityDepthModel", "default"));
 
-				seismicityDepthMinIndex = seismicity_depth.getModel().getMetaData().getAttributeIndex("SEISMICITY_DEPTH_MIN");
-				seismicityDepthMaxIndex = seismicity_depth.getModel().getMetaData().getAttributeIndex("SEISMICITY_DEPTH_MAX");
+			seismicityDepthMinIndex = seismicity_depth.getModel().getMetaData().getAttributeIndex("SEISMICITY_DEPTH_MIN");
+			seismicityDepthMaxIndex = seismicity_depth.getModel().getMetaData().getAttributeIndex("SEISMICITY_DEPTH_MAX");
 
-				if (log.isOutputOn())
+			if (log.isOutputOn())
+			{
+				log.writeln("Seismicity Depth Model: \n");
+				//log.writeln(seismicity_depth.getModel());
+				log.writeln(GeoTessModelUtils.statistics(seismicity_depth.getModel()));
+				log.writeln();
+			}
+			
+			if (spanSeismicityDepth && depths != null)
+			{
+				// find min and max seismicityDepth;
+				double smin = Double.POSITIVE_INFINITY;
+				double smax = Double.NEGATIVE_INFINITY;
+				PointMap m = seismicity_depth.getModel().getPointMap();
+				for (int i=0; i<m.size(); ++i)
 				{
-					log.writeln("Seismicity Depth Model: \n");
-					//log.writeln(seismicity_depth.getModel());
-					log.writeln(GeoTessModelUtils.statistics(seismicity_depth.getModel()));
-					log.writeln();
+					smin = Math.min(smin, m.getPointValueDouble(i, seismicityDepthMinIndex));
+					smax = Math.max(smax, m.getPointValueDouble(i, seismicityDepthMaxIndex));
 				}
+				
+				if (depths[0] > smin || depths[depths.length-1] < Math.min(700., smax))
+					throw new Exception(String.format(
+							"geotessDepths range does not span seismicityDepth range.\n"
+							+ "geotessDepths range   = [%1.3f, %1.3f]\n"
+							+ "seismicityDepth range = [%1.3f, %1.3f]%n",
+							depths[0], depths[depths.length-1], smin, smax
+							));
 			}
 		}
 
@@ -260,16 +286,52 @@ public class DataSourceGeoTess extends DataSource
         }
         else if (depths != null)
         {
+        	double minDepth, maxDepth;
+        	
+        	// user specified a list of depths where radial nodes are to be deployed.
         	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
         	{
         		// retrieve the unit vector corresponding to the current vertex
         		double[] vertex = bucket.geotessModel.getGrid().getVertex(vtx);
 
         		double earthRadius = VectorGeo.getEarthRadius(vertex);
+        		
+        		double[] z = depths.clone();
+            	
+        		if (spanSeismicityDepth)
+        		{
+        			// user specified that only depths that span the seismicity depth range
+        			// are to be included.  So, all depths > seismicity_depth_min and
+        			// < seismicity_depth_max, plus one depth <= seismicity_depth_min and
+        			// one depth >= seismicity_depth_max
+        			
+        			seismicity_depth.set(vertex, earthRadius);
+        			
+            		minDepth = seismicity_depth.getValue(seismicityDepthMinIndex);
 
-        		float[] radii = new float[depths.length];
-        		for (int i=0; i<depths.length; ++i)
-        			radii[i] = (float) (earthRadius-depths[depths.length-i-1]);
+            		// maxDepth can be no less than minDepth and no greater than 700 km.
+            		maxDepth = Math.min(700., Math.max(minDepth, seismicity_depth.getValue(seismicityDepthMaxIndex)));
+            		
+            		// find index of depth such that depth[zfirst] <= minDepth
+                	int zfirst = Globals.hunt(depths, minDepth, true, true);
+
+            		// find index of depth such that depth[zlast] >= maxDepth
+                	int zlast = depths.length-1;                	
+                	for (int i=depths.length-1; i >= 0; --i)
+            			if (depths[i] >= maxDepth)
+            				zlast = i;            		
+                	
+                	// copy the depths from depths[] to a[]
+            		ArrayListDouble a = new ArrayListDouble(depths.length);
+            		for (int i=zfirst; i<=zlast; ++i)
+            			a.add(depths[i]);
+            		 
+            		z = a.toArray();
+        		}
+        		
+        		float[] radii = new float[z.length];
+        		for (int i=0; i<z.length; ++i)
+        			radii[i] = (float) (earthRadius-z[z.length-1-i]);
 
         		if (polygon.contains(vertex))
         		{

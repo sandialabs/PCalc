@@ -202,14 +202,14 @@ public class PhaseLayerLevelBuilder
 		//int iCrust = getInterfaceIndex("UPPER_CRUST_TOP", "CRUST_TOP", "SEDIMENTARY_LAYER_1_TOP",
 		//		"SEDIMENTARY_LAYER_TOP", "SURFACE");
 
-		pld.addBottomLayer(181, "UPPER_CRUST_TOP", "CRUST_TOP", "SURFACE");
-		pld.addTopLayer(181, "UPPER_CRUST_TOP", "CRUST_TOP", "SURFACE");
+		//pld.addBottomLayer(181, "UPPER_CRUST_TOP", "CRUST_TOP", "SURFACE");
+		pld.addTopLayer(181, "SURFACE", "SEDIMENTARY_LAYER_1_TOP", "UPPER_CRUST_TOP", "MIDDLE_CRUST_TOP", "LOWER_CRUST_TOP");
 
-		pld.addBottomLayer(181, "LOWER_CRUST_TOP", "CRUST_TOP");
+		pld.addBottomLayer(181, "LOWER_CRUST_TOP", "MIDDLE_CRUST_TOP", "UPPER_CRUST_TOP", "SEDIMENTARY_LAYER_1_TOP", "SURFACE");
 
-		pld.addTopLayer(5, "UPPER_CRUST_TOP", "CRUST_TOP");
-		pld.addTopLayer(30, "MIDDLE_CRUST_TOP", "CRUST_TOP");
-		pld.addTopLayer(181, "LOWER_CRUST_TOP", "CRUST_TOP");
+		//pld.addTopLayer(5, "UPPER_CRUST_TOP", "CRUST_TOP");
+		//pld.addTopLayer(30, "MIDDLE_CRUST_TOP", "CRUST_TOP");
+		//pld.addTopLayer(181, "LOWER_CRUST_TOP", "CRUST_TOP");
 
 		return pld;
 	}
@@ -269,13 +269,13 @@ public class PhaseLayerLevelBuilder
 		// add all the sublayer interfaces between the MOHO and the top of the CRUST
 		// as specified at the current GridNode, to the Layers object.
 		// The interfaces are added to activeInterfaces as Depth objects.
-		int i = getInterfaceIndex("UPPER_CRUST_TOP", "CRUST_TOP", "SURFACE");
+		//int i = getInterfaceIndex("MOHO");
 		//addSubLayers(pld, i);
 
 		// add all the sublayer interfaces between the 410 and the Moho,
 		// as specified at the current GridNode, to the Layers object.
 		// The interfaces are added to activeInterfaces as Depth objects.
-		i = getInterfaceIndex("MOHO");
+		int i = getInterfaceIndex("MOHO");
 		addSubLayers(pld, i);
 
 		pld.addBottomLayer(10, "M410");
@@ -321,7 +321,7 @@ public class PhaseLayerLevelBuilder
 		addMajorLayerLevels(pld);
 
 		// add top layer to be tested as ICB for any ray
-		pld.addTopLayer(181, "ICB");
+		pld.addTopLayer(181, "CMB");
 
 		// add top layer to be tested as ICB for any ray
 		pld.addBottomLayer(181, "ICB");

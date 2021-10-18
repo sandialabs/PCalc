@@ -1299,20 +1299,20 @@ public class Bender extends Predictor implements BrentsFunction, SimplexFunction
 				switch (remapCase) {
 				case 1:
 					s += "This is the top most EarthInterface that is defined in the\n"
-					   + "CRUST by the assigned GeoTessModel ...\n";
+					   + "CRUST by the assigned GeoTessModel ...\n\n";
 					break;
 				case 2:
 					s += "This is the closest \"" + rmap.getInterfaceGroup().name() + "\" group interface defined "
-					   + "in the input\nGeoTessModel that lies above the requested EarthInterface ...\n";
+					   + "in the input\nGeoTessModel that lies above the requested EarthInterface ...\n\n";
 					break;
 				case 3:
 					s += "No interface in the CRUST group was discovered above the requested interface,\n"
 					   + "so the requested interface was mapped to the top most CRUST group interface\n"
-					   + "defined in the GeoTessModel ...";
+					   + "defined in the GeoTessModel ...\n\n";
 					break;
 				case 4:
 					s += "This is the closest \"" + rmap.getInterfaceGroup().name() + "\" group interface defined "
-							   + "in the input\nGeoTessModel that lies above the requested EarthInterface ...\n";
+							   + "in the input\nGeoTessModel that lies above the requested EarthInterface ...\n\n";
 					break;
 				default:
 				
