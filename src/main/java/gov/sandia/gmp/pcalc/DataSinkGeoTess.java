@@ -36,7 +36,6 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.util.ArrayList;
 
-import gov.sandia.geotess.Data;
 import gov.sandia.geotess.GeoTessModel;
 import gov.sandia.geotess.GeoTessModelUtils;
 import gov.sandia.geotess.PointMap;
@@ -120,7 +119,15 @@ public class DataSinkGeoTess extends DataSink {
 				e.printStackTrace();
 			}
 			d.append("phase = ").append(bucket.phases.get(0).toString()).append("\n");
-
+			
+			if (properties.containsKey("geotessDepthSpacing"))
+				d.append("geotessDepthSpacing = "+properties.getProperty("geotessDepthSpacing", "")+"\n");
+			if (properties.containsKey("geotessDepths"))
+			{
+				d.append("geotessDepths = "+properties.getProperty("geotessDepths", "")+"\n");
+				d.append("spanSeismicityDepth = "+properties.getProperty("spanSeismicityDepth", "true")+"\n");
+			}
+			
 			String predictor = properties.getProperty("predictors", "?");
 			if (predictor.equalsIgnoreCase("bender"))
 			{

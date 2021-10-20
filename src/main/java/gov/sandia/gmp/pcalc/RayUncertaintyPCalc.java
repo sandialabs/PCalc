@@ -34,7 +34,11 @@ package gov.sandia.gmp.pcalc;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Scanner;
 
 import gov.sandia.gmp.baseobjects.geovector.GeoVector;
@@ -43,7 +47,6 @@ import gov.sandia.gmp.rayuncertainty.RayUncertainty;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.globals.Site;
 import gov.sandia.gmp.util.propertiesplus.PropertiesPlus;
-import gov.sandia.gmp.util.propertiesplus.PropertiesPlusException;
 
 public class RayUncertaintyPCalc {
 	
@@ -62,24 +65,74 @@ public class RayUncertaintyPCalc {
 		
 		extractUncertaintyValues(properties, pcalc, dataBucket);
 		
-		try {
-			// delete the temporary ray uncertainty work directory. Try 10 times.
-			File ioDir = properties.getFile("ioDirectory");
-			for (int i=0; i<10; ++i)
+		try
+		{
+			// write a file named DONE in the ioDirectory indicating that
+			// RayUncertainty has completed and that the directory can be deleted.
+			File f = properties.getFile("ioDirectory");
+			if (f!= null)
 			{
-				Thread.sleep(500);
-				deleteFile(ioDir);
-				Thread.sleep(500);
-				if (!ioDir.exists())
-					break;
+				f = new File(f, "DONE");
+				FileWriter fw = new FileWriter(f);
+				fw.write(new Date().toString());
+				fw.close();
 			}
-		} catch (Exception e) {
-			pcalc.log.writeln(e);
+		}
+		catch (Exception ex) {
+			pcalc.log.writeln(ex);	
+		}
+		
+		// Rename the properties file from rayuncertainty-sta-yyyy-MM-dd-HH-mm-ss-SSS.properties
+		// to deleteme-sta-yyyy-MM-dd-HH-mm-ss-SSS.properties
+		File propertiesFile = properties.getFile("propertiesFileName");
+		try {
+			if (propertiesFile != null)
+			{
+				File newFileName = new File(propertiesFile.getParentFile(), 
+						propertiesFile.getName().replace("rayuncertainty", "deleteme"));
+				if (propertiesFile.renameTo(newFileName))
+					propertiesFile = newFileName;
+			}
+		}
+		catch (Exception ex) {
+			pcalc.log.writeln(ex);	
+		}
+		
+		// delete the ray uncertainty properties file (created by buildPropertyFile method).
+		try {
+			propertiesFile.delete();
+		} catch (Exception ex) {
+			pcalc.log.writeln(ex);
+		}
+		
+
+		
+		// Rename the iodirectory from rayuncertainty-yyyy-MM-dd-HH-mm-ss-SSS
+		// to deleteme-yyyy-MM-dd-HH-mm-ss-SSS
+		File ioDirectory = properties.getFile("ioDirectory");
+		try {
+			if (ioDirectory != null)
+			{
+				File newFileName = new File(ioDirectory.getParentFile(), 
+						ioDirectory.getName().replace("rayuncertainty", "deleteme"));
+				if (ioDirectory.renameTo(newFileName))
+					ioDirectory = newFileName;
+			}
+		}
+		catch (Exception ex) {
+			pcalc.log.writeln(ex);	
 		}
 		
 		try {
-			// delete the ray uncertainty properties file (created by buildPropertyFile method).
-			properties.getFile("propertiesFileName").delete();
+			// delete the temporary ray uncertainty work directory. Try 10 times.
+			for (int i=0; i<10; ++i)
+			{
+				Thread.sleep(1000);
+				deleteFile(ioDirectory);
+				Thread.sleep(1000);
+				if (!ioDirectory.exists())
+					break;
+			}
 		} catch (Exception e) {
 			pcalc.log.writeln(e);
 		}
@@ -125,6 +178,9 @@ public class RayUncertaintyPCalc {
 		ru.initializeSolution(properties.getFile("propertiesFileName").getAbsolutePath());
 		ru.solve();
 		if (ru.getGUI() != null) ru.getGUI().dispose();
+		ru = null;
+		// call the garbage collector
+		System.gc();
 	}
 
 	private PropertiesPlus buildPropertyFile(PCalc pcalc, Bucket dataBucket) throws Exception
@@ -151,7 +207,7 @@ public class RayUncertaintyPCalc {
 			throw new Exception(String.format("Properties file specifies benderModel=%s%nbut that directory does not contain tomo_model.geotess.",
 					benderModel.getAbsolutePath()));
 		
-		File ioDirectory = getWorkDir(workDir);
+		File ioDirectory = getWorkDir(workDir, pcalc.bucket.site.getSta());
 		
 		if (ioDirectory.exists())
 			throw new Exception("Unable to create a new, empty, bender uncertainty work directory "
@@ -241,7 +297,11 @@ public class RayUncertaintyPCalc {
                 + "which will be used by RayUncertainty to compute path dependent travel time uncertainty values",
         getClass().getName());
         
-        p.store(new FileOutputStream(rayPropertiesFileName), comment);
+        FileOutputStream fos = new FileOutputStream(rayPropertiesFileName);
+        
+        p.store(fos, comment);
+        
+        fos.close();
 
 		return p;
 	}
@@ -274,15 +334,16 @@ public class RayUncertaintyPCalc {
 	}
 	
 	/**
-	 * Get a File consisting of root/deleteme_<currentTimeMillis>
+	 * Get a File consisting of root/rayuncertainty-yyyy-MM-dd-HH-mm-ss-SSS
 	 * @param root
 	 * @return
 	 * @throws Exception
 	 */
-	private synchronized File getWorkDir(File root) throws Exception
+	private synchronized File getWorkDir(File root, String sta) throws Exception
 	{
 		Thread.sleep(50);
-		return new File(root, String.format("deleteme_%d",System.currentTimeMillis()));
+		DateFormat tformat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS");
+		return new File(root, String.format("rayuncertainty-%s-%s",sta, tformat.format(new Date())));
 	}
 
 }
