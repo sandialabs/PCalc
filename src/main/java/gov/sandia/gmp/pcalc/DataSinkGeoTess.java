@@ -118,6 +118,7 @@ public class DataSinkGeoTess extends DataSink {
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
+			d.append("grid rotation angles = "+bucket.geotessModel.getMetaData().getEulerRotationAnglesString()+"\n");
 			d.append("phase = ").append(bucket.phases.get(0).toString()).append("\n");
 			
 			if (properties.containsKey("geotessDepthSpacing"))
@@ -211,7 +212,7 @@ public class DataSinkGeoTess extends DataSink {
 	{
 		try {
 			if (!benderModel.getClass().getSimpleName().equals("GeoTessModelSiteData"))
-				d.append("No site terms are availabe because benderModel is not a GeoTessModelSiteData.\n");
+				d.append("No site terms are available because benderModel is not a GeoTessModelSiteData.\n");
 			else
 			{
 				String sta = properties.getProperty("sta");
@@ -252,6 +253,9 @@ public class DataSinkGeoTess extends DataSink {
 	public void close() throws Exception {
 		if (log.isOutputOn())
 			log.write(String.format("Sending output to %s%n", new File(outputFile).getCanonicalPath()));
+		
+		File f = new File(outputFile);
+		f.getParentFile().mkdirs();
 
 		if (this.properties.containsKey("geotessOutputGridFile"))
 			geotessModel.writeModel(outputFile, this.properties.getFile("geotessOutputGridFile"));

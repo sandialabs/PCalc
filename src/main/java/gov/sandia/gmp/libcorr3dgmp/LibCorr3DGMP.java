@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
 
-import gov.sandia.geotess.GeoTessException;
 import gov.sandia.geotess.extensions.libcorr3d.LibCorr3D;
 import gov.sandia.geotess.extensions.libcorr3d.LibCorr3DModels;
 import gov.sandia.gmp.baseobjects.AttributeIndexerSmart;
@@ -114,7 +113,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 	 */
 	public LibCorr3DGMP(File rootPath, String relGridPath, boolean preloadModels,
 			InterpolatorType interpTypeHorz, 
-			InterpolatorType interpTypeRadial) throws GMPException, IOException
+			InterpolatorType interpTypeRadial) throws Exception
 	{
 		super(rootPath, relGridPath, preloadModels, interpTypeHorz, interpTypeRadial);
 		findSupportedObservations();
@@ -149,7 +148,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 			InterpolatorType interpTypeRadial)
 			throws GMPException, IOException
 	{
-		this(((LibCorr3DModelsGMP)models).getModels(), interpTypeHorz, interpTypeRadial);
+		this(((LibCorr3DModels)models), interpTypeHorz, interpTypeRadial);
 	}
 
 	/**
@@ -294,21 +293,6 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 		}
 		catch (Exception e)
 		{
-			try
-			{
-				u = getUncertainty(lookupIndex,
-						source.getPosition().getUnitVector(), 
-						source.getPosition() .getRadius());
-			}
-			catch (GeoTessException e1)
-			{
-				e1.printStackTrace();
-			}
-			catch (IOException e1)
-			{
-				e1.printStackTrace();
-			}
-
 			throw new GMPException(e);
 		}
 
@@ -392,7 +376,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 			
 			return Double.isNaN(pathCorr) ? Globals.NA_VALUE : pathCorr;
 		}
-		catch (GeoTessException e)
+		catch (Exception e)
 		{
 			throw new GMPException(e);
 		}
@@ -410,7 +394,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 			
 			return Double.isNaN(pathCorr) ? Globals.NA_VALUE : pathCorr;
 		}
-		catch (GeoTessException e)
+		catch (Exception e)
 		{
 			throw new GMPException(e);
 		}
@@ -428,7 +412,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 			
 			return Double.isNaN(pathCorr) ? Globals.NA_VALUE : pathCorr;
 		}
-		catch (GeoTessException e)
+		catch (Exception e)
 		{
 			throw new GMPException(e);
 		}
@@ -446,7 +430,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 			
 			return Double.isNaN(pathCorr) ? Globals.NA_VALUE : pathCorr;
 		}
-		catch (GeoTessException e)
+		catch (Exception e)
 		{
 			throw new GMPException(e);
 		}
@@ -464,7 +448,7 @@ public class LibCorr3DGMP extends LibCorr3D implements PathCorrectionsInterface,
 			
 			return Double.isNaN(pathCorr) ? Globals.NA_VALUE : pathCorr;
 		}
-		catch (GeoTessException e)
+		catch (Exception e)
 		{
 			throw new GMPException(e);
 		}

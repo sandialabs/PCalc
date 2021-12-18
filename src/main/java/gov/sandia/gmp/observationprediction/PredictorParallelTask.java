@@ -220,473 +220,164 @@ public class PredictorParallelTask extends ParallelTask
   	aProperties = predProperties;
   }
 
-  /**
-   * The function that processes all PredictorObservation objects stored in
-   * aPredObs when called. Each PredictorObservation is used as an input
-   * into the Bender ray calculation method to compute a RayInfo result
-   * object for output. The results are stored as a set of PredictorResult
-   * objects in a single PredictorParallelTaskResult that matches one-for-one
-   * this PredictorParallelTask. Each PredictorResult contains the computed
-   * RayInfo object and the index of the PredictorObservation object.
-   *
-   * <p> The run() method is called by the JPPF distributed system to be
-   * executed on a network node.
-   */
-  @Override
-  public void run()
-  {
-    // convert file paths from Windows to Linux if necessary
-	  
-//    aPredModelFilePath  = PropertiesPlus.convertWinFilePathToLinux(aPredModelFilePath);
-    aTomoModelFilePath  = PropertiesPlus.convertWinFilePathToLinux(aTomoModelFilePath);
-    predModelFilePath   = PropertiesPlus.convertWinFilePathToLinux(predModelFilePath);
-    tomoModelFilePath   = PropertiesPlus.convertWinFilePathToLinux(tomoModelFilePath);
-    polygonFilePath     = PropertiesPlus.convertWinFilePathToLinux(polygonFilePath);
+	/**
+	 * The primary parallel task function that processes all PredictionRequest
+	 * objects stored in aPredObs list when this task was instantiated. Each
+	 * PredictionRequest is processed using the Bender ray calculation method to
+	 * compute a Prediction (RayInfo from Bender) object result that is stored in a
+	 * PredictorResult for return to the caller.
+	 */
+	@Override
+	public void run() {
+		// convert file paths from Windows to Linux if necessary
 
-    // create and initialize the task result
+		aTomoModelFilePath = PropertiesPlus.convertWinFilePathToLinux(aTomoModelFilePath);
+		predModelFilePath = PropertiesPlus.convertWinFilePathToLinux(predModelFilePath);
+		tomoModelFilePath = PropertiesPlus.convertWinFilePathToLinux(tomoModelFilePath);
+		polygonFilePath = PropertiesPlus.convertWinFilePathToLinux(polygonFilePath);
 
-    PredictorParallelTaskResult results;
-    results = new PredictorParallelTaskResult(aPredObs.size(),
-                                              predModelFilePath,
-                                              polygonFilePath);
-    results.setTaskSubmitTime(getSubmitTime());
-    results.setIndex(getIndex());
-    setResult(results);
+		// create and initialize the task result
 
-    // create temporary definitions and objects
+		PredictorParallelTaskResult results;
+		results = new PredictorParallelTaskResult(aPredObs.size(), predModelFilePath,
+				polygonFilePath);
+		results.setTaskSubmitTime(getSubmitTime());
+		results.setIndex(getIndex());
+		setResult(results);
 
-    PredictorFactory predictorFactory = null; 
-  	ArrayList<double[]> rayPathUnitVec  = new ArrayList<double[]>();
-  	ArrayListDouble     rayPathRadii    = new ArrayListDouble();
-    HashMapIntegerDouble weights = new HashMapIntegerDouble();
-    Profiler profiler = null;
+		// create temporary definitions and objects
 
-    // enter error catch code
+		PredictorFactory predictorFactory = null;
+		ArrayList<double[]> rayPathUnitVec = new ArrayList<double[]>();
+		ArrayListDouble rayPathRadii = new ArrayListDouble();
+		HashMapIntegerDouble weights = new HashMapIntegerDouble();
+		Profiler profiler = null;
 
-    try
-    {
-    	// get and save host name
+		// enter error catch code
 
-      String hostname = (InetAddress.getLocalHost()).getHostName();
-      results.setHostName(hostname);
-      outputTaskInfo(results.getHostName(), "Entry", "");
+		try {
+			// get and save host name
 
-      // create profiler if requested
+			String hostname = (InetAddress.getLocalHost()).getHostName();
+			results.setHostName(hostname);
+			outputTaskInfo(results.getHostName(), "Entry", "");
 
-      if (aProfilerSamplePeriod > 0)
-      {
-        profiler = new Profiler(Thread.currentThread(), aProfilerSamplePeriod,
-                                "PredictorParallelTask:" + hostname);
-        profiler.setTopClass("gov.sandia.gmp.observationprediction.PredictorParallelTask");
-        profiler.setTopMethod("run");
-        profiler.accumulateOn();
-      }
+			// create profiler if requested
 
-      // Make a default properties file if it does not exist or doesn not
-      // define a predictor.
+			if (aProfilerSamplePeriod > 0) {
+				profiler = new Profiler(Thread.currentThread(), aProfilerSamplePeriod,
+						"PredictorParallelTask:" + hostname);
+				profiler.setTopClass("gov.sandia.gmp.observationprediction.PredictorParallelTask");
+				profiler.setTopMethod("run");
+				profiler.accumulateOn();
+			}
 
-      long time0  = (new Date()).getTime();
-      if (aProperties == null) aProperties = new PropertiesPlusGMP();
-    	if (aProperties.getProperty("predictors") == null)
-        aProperties.put("predictors", "Bender");
-    	if (aProperties.get("predictors").equals("Bender"))
-    	{
-        aProperties.put("benderModel", predModelFilePath);
-        if ((polygonFilePath != null) && !polygonFilePath.equals("")) 
-          aProperties.put("benderModelActiveNodePolygon", polygonFilePath);      		
-    	}
+			// Make a default properties file if it does not exist or does not
+			// define a predictor.
 
-      // create the predictor factory ... add the prediction requests ... get
-      // the predictions
+			long time0 = (new Date()).getTime();
+			if (aProperties == null)
+				aProperties = new PropertiesPlusGMP();
+			if (aProperties.getProperty("predictors") == null)
+				aProperties.put("predictors", "Bender");
+			if (aProperties.get("predictors").equals("Bender")) {
+				aProperties.put("benderModel", predModelFilePath);
+				if ((polygonFilePath != null) && !polygonFilePath.equals(""))
+					aProperties.put("benderModelActiveNodePolygon", polygonFilePath);
+			}
 
-      predictorFactory = new PredictorFactory(aProperties, "predictors");
-      predictorFactory.addPredictionRequests(aPredObs);
-      ArrayList<PredictionInterface> predictions = predictorFactory.getPredictions(false);
-      
-       // done with predictions ... now get the prediction model and create the
-      // tomography model for producing node weights if requested.
+			// create the predictor factory ... add the prediction requests ... get
+			// the predictions
 
-      GeoTessModel predModel = ((GeoTessModel) predictorFactory.getPredictor(PredictorType.BENDER).getEarthModel());
-      predModelFilePath = predModel.getCurrentModelFileName();
-      createTomographyGeoTessModel(predModel);
+			predictorFactory = new PredictorFactory(aProperties, "predictors");
+			predictorFactory.addPredictionRequests(aPredObs);
+			ArrayList<PredictionInterface> predictions = predictorFactory.getPredictions(false);
 
-      // loop over all predictions and populate the prediction result list and
-      // build the ray weights for each prediction
+			// done with predictions ... now get the prediction model and create the
+			// tomography model for producing node weights if requested.
 
-      for (int i = 0; i < predictions.size(); i++)
-      {
-    	// add ray to list and continue
-      	PredictionInterface  pi = predictions.get(i);  
-      	PredictorObservation po = (PredictorObservation)pi.getPredictionRequest();
-    
-      	if (po != null) {
-      		PredictorResult pr = new PredictorResult(pi, po.getObservationIndex(),
-                                                 true);
-      		buildTomographyModelWeights(pi, rayPathUnitVec, rayPathRadii, weights,
-        		                        pr, po);
-      		results.addRay(pr);
-      	}
-      }
+			GeoTessModel predModel = ((GeoTessModel) predictorFactory.getPredictor(
+					PredictorType.BENDER).getEarthModel());
+			predModelFilePath = predModel.getCurrentModelFileName();
+			createTomographyGeoTessModel(predModel);
 
-      // done ... set list of rays into results and the calculation time
-      // and host processor name ... exit
+			// loop over all predictions and populate the prediction result list and
+			// build the ray weights for each prediction
 
-      long boid = aPredObs.get(0).getObservationId();
-      if (aOutput) System.out.println("Finished Bender Compute Ray " +
-                                      "Calculation (Group Index = " + boid +
-                                      ") ...");
-      results.setCalculationTime(time0);
+			for (int i = 0; i < predictions.size(); i++) {
+				// add ray to list and continue
+				PredictionInterface pi = predictions.get(i);
+				PredictorObservation po = (PredictorObservation) pi.getPredictionRequest();
 
-      if (aDebug) results.appendMessage("Execution complete .... Done");
-      
-      // turn off profiler if on and set into results
+				if (po != null) {
+					PredictorResult pr = new PredictorResult(pi, po.getObservationIndex(), true);
+					buildTomographyModelWeights(pi, rayPathUnitVec, rayPathRadii, weights, pr, po);
+					results.addRay(pr);
+				}
+			}
 
-      if (profiler != null)
-      {
-        profiler.stop();
-        if (aProfilerNodeVerbose) profiler.printAccumulationString();
-        results.setProfilerContent(profiler.getProfilerContent());
-        profiler = null;
-      }      
-      outputTaskInfo(results.getHostName(), "Exit", "");
-    }
-    catch (UnsupportedOperationException ex)
-    {
-      // likely GeoModel or Bender creation error
+			// done ... set list of rays into results and the calculation time
+			// and host processor name ... exit
 
-      if (profiler != null)
-      {
-        profiler.stop();
-        if (aProfilerNodeVerbose) profiler.printAccumulationString();
-        profiler = null;
-      }      
+			long boid = aPredObs.get(0).getObservationId();
+			if (aOutput)
+				System.out.println("Finished Bender Compute Ray "
+			+ "Calculation (Group Index = " + boid + ") ...");
+			results.setCalculationTime(time0);
 
-      if (aOutput)
-        System.out.println("BenderTaskBundle::catch " +
-                           "(UnsupportedOperationException ex) ");
-      ex.printStackTrace();
-      results.setException(ex);
-      if (aDebug) results.appendMessage("Exception Occurred ...");
-      outputTaskInfo(results.getHostName(), "Error", "");
-    }
-    catch (Exception ex)
-    {
-      // likely GeoModel or Bender creation error
+			if (aDebug)
+				results.appendMessage("Execution complete .... Done");
 
-      if (profiler != null)
-      {
-        profiler.stop();
-        if (aProfilerNodeVerbose) profiler.printAccumulationString();
-        profiler = null;
-      }      
+			// turn off profiler if on and set into results
 
-      if (aOutput)
-        System.out.println("BenderTaskBundle::catch (Exception ex) ");
-      ex.printStackTrace();
-      results.setException(ex);
-      if (aDebug) results.appendMessage("Exception Occurred ...");
-      outputTaskInfo(results.getHostName(), "Error", "");
-    }
-  }
-//
-//    // set predictor/model identifier and create a new result bundle
-//
-//    PredictorParallelTaskResult results;
-//    results = new PredictorParallelTaskResult(aPredObs.size(),
-//                                              predModelFilePath, polygonFilePath);
-//    results.setTaskSubmitTime(getSubmitTime());
-//    results.setIndex(getIndex());
-//    setResult(results);
-//
-////    HashMapIntegerDouble weights = new HashMapIntegerDouble();
-//
-//    try
-//    {
-//      String hostname = (InetAddress.getLocalHost()).getHostName();
-//      results.setHostName(hostname);
-//      outputTaskInfo(results.getHostName(), "Entry", "");
-//
-//      // see if a new bender needs to be instantiated
-//      synchronized(PredictorParallelTaskResult.class)
-//      {
-//        if ((aModel == null) || !aPredModelFilePath.equals(predModelFilePath))
-//        {
-//          // create a new bender and save in static variable. Only create if
-//          // bender does not yet exist or if the iteration count has changed
-//          // first set directory path
-//
-//          // create GeoModel, set active Polygon, and create Bender object
-//          if (aDebug)
-//          {
-//            results.appendMessage("Creating a new bender with id:");
-//            results.appendMessage("   " + id);
-//          }
-//          
-//          // Read in the GeoModel
-//          System.out.println("before reading geomodel");
-//          aModel     = readGeoModel(predModelFilePath);
-//          if (!tomoModelFilePath.equals(""))
-//            aTomoModel = readGeoModel(tomoModelFilePath);
-//
-//          Polygon3D polygon = null;
-//          if ((polygonFilePath != null) && (polygonFilePath.length() > 0))
-//          {
-//          	File f = new File(polygonFilePath);
-//            polygon = new Polygon3D(f);
-//            aModel.setActiveRegion(polygon);
-//            if (aTomoModel != null)
-//              aTomoModel.setActiveRegion(polygon);
-//          }
-//          else
-//          {
-//            aModel.setActiveRegion();
-//            if (aTomoModel != null)
-//              aTomoModel.setActiveRegion();
-//          }
-//
-//          if (aOutput)
-//          {
-//            System.out.println("");
-//            System.out.println("Created Prediction GeoModel ...");
-//            System.out.println(aModel.getMetaData().getInputModelFile().getCanonicalPath());
-//            System.out.println("");
-//            if (aTomoModel != null) {
-//            	System.out.println("Created Tomography GeoModel ...");
-//            	System.out.println(aTomoModel.getMetaData().getInputModelFile().getCanonicalPath());
-//            }
-//          }
-//          if (aDebug) results.appendMessage("Created new bender ...");
-//
-//          // save configuration string and set verbosity
-//
-//          aPredModelFilePath = predModelFilePath;
-//        }
-//      }
-//
-//      // create profiler if requested
-//
-//      if (aProfilerSamplePeriod > 0)
-//      {
-//        profiler = new Profiler(Thread.currentThread(), aProfilerSamplePeriod,
-//                                "PredictorParallelTask:" + hostname);
-//        profiler.setTopClass("gov.sandia.gmp.observationprediction.PredictorParallelTask");
-//        profiler.setTopMethod("run");
-//        profiler.accumulateOn();
-//      }
-//
-//      // create bender and initialize output
-//
-//      bender = new Bender(aModel);
-//      bender.setVerbosity(0);
-//      bender.setMaxCalcTime(aMaxAllowedRayCalcTime);
-//      bender.setSearchMethod(aBenderSearchMethod);
-//      bender.setGradientCalculator(GradientCalculationMode.PRECOMPUTED, tetSize);
-//      bender.setUseTTSiteCorrections(useSiteTermCorrections);
-//      bender.setAllowCMBDiffraction(allowCMBDiffraction);
-//      long boid = aPredObs.get(0).getObservationId();
-//      if (aOutput) System.out.println("Beginning Bender Compute Ray " +
-//                                      "Calculation (Group Index = " + boid +
-//                                      ") ...");
-////    	ArrayList<double[]> rayPathUnitVec  = new ArrayList<double[]>();
-////    	ArrayListDouble     rayPathRadii    = new ArrayListDouble();
-//
-//      // set start time and loop over all executable bender objects
-//
-//      long time0  = (new Date()).getTime();
-//      long timeChk0 = System.nanoTime();
-//      long timeChk1 = 0;
-//      long timeChkLimit = 500000000L * aPredObs.size();
-//      if (aDebug) results.appendMessage("Calculating " + aPredObs.size() +
-//                                        " ray paths ...");
-//      for (int i = 0; i < aPredObs.size(); i++)
-//      {
-//        // get the ith execution object and set the source, receiver, and phase
-//
-//        PredictorObservation bo = aPredObs.get(i);
-//
-//        // calculate the ray if defining
-//
-//        RayInfo ray = null;
-//        boolean computedRay = true;
-//        if (!bo.isDefining())
-//        {
-//          // non-defining ray ... set dummy rayinfo object
-//
-//          computedRay = false;
-//          ray = new RayInfo(bo, bender, "observation is non-defining");
-//          if (aDebug) results.appendMessage("Ray is non-defininig ...");
-//        }
-//        else
-//        {
-//          try
-//          {
-//            // compute ray
-//
-//            ray = bender.computeFastRays(bo)[0];
-// 
-//
-//            // check run time for this bundle ... if too long then output
-//            // a message indicating progress thus far
-//
-//            timeChk1 = System.nanoTime();
-//            if (aOutput &&
-//                (timeChk1 - timeChk0 > timeChkLimit))
-//            {
-//              timeChk0 = timeChk1;
-//              System.out.println("  Processing index <group, obs> = <" +
-//                                 boid + ", " + i + "> of " +
-//                                 aPredObs.size() + " observations ...");
-//            }
-//          }
-//          catch (Exception ex)
-//          {
-//            // execution error ... set dummy rayinfo object and save error
-//            // message into it
-//
-//            if (aDebug) results.appendMessage("Exception Occurred ...");
-//            computedRay = false;
-//            ray = new RayInfo(bo, bender, getStackTraceString(ex));
-//            System.out.println("  Bender.ComputeFastRays(b0) error ..." + NL +
-//                               "    Ray Index: " + bo.getObservationIndex() + NL +
-//                               "    " + getStackTraceString(ex));
-//          }
-//        }
-//
-//        // add ray to list and continue
-//
-//        PredictorResult br = new PredictorResult(ray, bo.getObservationIndex(),
-//                                                 computedRay);
-//        
-//        if (aTomoModel != null)
-//        {
-//          // convert prediction ray path to tomography grid weights if it is
-//          // a valid ray
-//
-//          if (ray.getRayPath() != null)
-//          {
-//            // valid ray ... get tomography grid weights
-//          	ray.getRayPath(rayPathUnitVec, rayPathRadii);
-//          	aTomoModel.getWeights(rayPathUnitVec, rayPathRadii, null,
-//          			                  InterpolatorType.LINEAR,
-//          			                  InterpolatorType.LINEAR, weights);
-////            aTomoModel.getWeights(ray.getWaveType(), ray.getRayPath(),
-////                                  weights);
-//            // loop over all entries and put them in an array ... set the index and
-//            // weight arrays into the predictor result
-//
-//            HashMapIntegerDouble.Iterator it = weights.iterator();
-//            int[]    indxs = new int [weights.size()];
-//            double[] wghts = new double [weights.size()];
-//            int j = 0;
-//            while (it.hasNext())
-//            {
-//              HashMapIntegerDouble.Entry e = it.nextEntry();
-//              indxs[j] = e.getKey();
-//              wghts[j] = e.getValue();
-//              ++j;
-//            }
-//            br.setWeights(indxs, wghts);
-//
-////            // ******** test code
-////            double[] rweights = ray.getActiveNodeWeights();
-////            int[]    rindxs   = ray.getActiveNodeIndexes();
-////            HashMapIntegerDouble.Entry e;
-////            if (Math.abs(rweights.length - weights.size()) > 1)
-////            {
-////              System.out.println("Input weights size (" + rweights.length +
-////                                 ") is not equal to output size (" +
-////                                 weights.size() + ") ...");
-////            }
-////            for (int k = 0; k < rweights.length; ++k)
-////            {
-////              e = weights.getEntry(rindxs[k]);
-////              if (e == null)
-////              {
-////                System.out.println("Can't find index = " + rindxs[k] +
-////                                   " in weights ...");
-////                synchronized (this)
-////                {
-////                  ++aMissingWeights;
-////                  if (rweights[k] > 1.0e-2)
-////                  {
-////                    System.out.println("Missing large Weight found (" +
-////                                       rweights[k]);
-////                    ++aLargeMissingWeights;
-////                  }
-////                }
-////              }
-////            }
-////            // ******** test code
-//
-//            // if RAY_PATH was not requested nullify it and set result into the
-//            // result array
-//
-//            if (!bo.returnRayPath()) ray.nullifyRayPath();
-//            ray.nullifyActiveNodeWeights();
-//          }
-//        }
-//        results.addRay(br);
-//      }
-//
-//      // done ... set list of rays into results and the calculation time
-//      // and host processor name ... exit
-//
-//      if (aOutput) System.out.println("Finished Bender Compute Ray " +
-//                                      "Calculation (Group Index = " + boid +
-//                                      ") ...");
-//      results.setCalculationTime(time0);
-//
-//      if (aDebug) results.appendMessage("Execution complete .... Done");
-//      
-//      // turn off profiler if on and set into results
-//
-//      if (profiler != null)
-//      {
-//        profiler.stop();
-//        if (aProfilerNodeVerbose) profiler.printAccumulationString();
-//        results.setProfilerContent(profiler.getProfilerContent());
-//        profiler = null;
-//      }      
-//      outputTaskInfo(results.getHostName(), "Exit", "");
-//    }
-//    catch (UnsupportedOperationException ex)
-//    {
-//      // likely GeoModel or Bender creation error
-//
-//      if (profiler != null)
-//      {
-//        profiler.stop();
-//        if (aProfilerNodeVerbose) profiler.printAccumulationString();
-//        profiler = null;
-//      }      
-//
-//      if (aOutput)
-//        System.out.println("BenderTaskBundle::catch " +
-//                           "(UnsupportedOperationException ex) ");
-//      ex.printStackTrace();
-//      results.setException(ex);
-//      if (aDebug) results.appendMessage("Exception Occurred ...");
-//      outputTaskInfo(results.getHostName(), "Error", "");
-//    }
-//    catch (Exception ex)
-//    {
-//      // likely GeoModel or Bender creation error
-//
-//      if (profiler != null)
-//      {
-//        profiler.stop();
-//        if (aProfilerNodeVerbose) profiler.printAccumulationString();
-//        profiler = null;
-//      }      
-//
-//      if (aOutput)
-//        System.out.println("BenderTaskBundle::catch (Exception ex) ");
-//      ex.printStackTrace();
-//      results.setException(ex);
-//      if (aDebug) results.appendMessage("Exception Occurred ...");
-//      outputTaskInfo(results.getHostName(), "Error", "");
-//    }
-//  }
+			if (profiler != null) {
+				profiler.stop();
+				if (aProfilerNodeVerbose)
+					profiler.printAccumulationString();
+				results.setProfilerContent(profiler.getProfilerContent());
+				profiler = null;
+			}
+			outputTaskInfo(results.getHostName(), "Exit", "");
+		} catch (UnsupportedOperationException ex) {
+			// likely GeoTessModel or Bender creation error
+
+			if (profiler != null) {
+				profiler.stop();
+				if (aProfilerNodeVerbose)
+					profiler.printAccumulationString();
+				profiler = null;
+			}
+
+			// set exception in results object and return
+
+			if (aOutput)
+				System.out.println("PredictorParallelTask::catch " + "(UnsupportedOperationException ex) ");
+			ex.printStackTrace();
+			results.setException(ex);
+			if (aDebug)
+				results.appendMessage("Exception Occurred ...");
+			outputTaskInfo(results.getHostName(), "Error", "");
+		} catch (Exception ex) {
+			// likely GeoTessModel or Bender creation error
+
+			if (profiler != null) {
+				profiler.stop();
+				if (aProfilerNodeVerbose)
+					profiler.printAccumulationString();
+				profiler = null;
+			}
+
+			// set exception in results object and return
+
+			if (aOutput)
+				System.out.println("PredictorParallelTask::catch (Exception ex) ");
+			ex.printStackTrace();
+			results.setException(ex);
+			if (aDebug)
+				results.appendMessage("Exception Occurred ...");
+			outputTaskInfo(results.getHostName(), "Error", "");
+		}
+	}
 
   /**
    * Reads the GeoTessModel at the input file path. The method continues to
@@ -813,147 +504,129 @@ public class PredictorParallelTask extends ParallelTask
         obs.getRequestedAttributes().remove(GeoAttributes.DTT_DSLOW);
     }
   }
-  
-  /**
-  * Simple utilities to return the stack trace of an
-  * exception as a String.
-  */
-  public static String getStackTraceString(Throwable aThrowable)
-  {
-    final Writer result = new StringWriter();
-    final PrintWriter printWriter = new PrintWriter(result);
-    aThrowable.printStackTrace(printWriter);
-    return result.toString();
-  }
-  
 
-  /**
-   * Constructs a list of parallel tasks from the input list of observations.
-   *
-   * @param obs List of all observations from which parallel tasks will be
-   *            constructed.
-   * @param numPredPerTask Approximate number of predictions per task.
-   * @return List of all parallel prediction tasks.
-   */
-  public static ArrayList<PredictorParallelTask>
-         buildPredictorParallelTasks(ObservationList obs,
-                                     String tomoModelPath,
-                                     int numPredPerTask,
-                                     SearchMethod bsm,
-                                     PropertiesPlusGMP predictorProps,
-                                     boolean saveRayPaths)
-  {
-    PredictorParallelTask bob;
-    
-    // set up predictor observation and predictor parallel task lists
+	/**
+	 * Simple utilities to return the stack trace of an exception as a String.
+	 */
+	public static String getStackTraceString(Throwable aThrowable) {
+		final Writer result = new StringWriter();
+		final PrintWriter printWriter = new PrintWriter(result);
+		aThrowable.printStackTrace(printWriter);
+		return result.toString();
+	}  
 
-    ArrayList<PredictorObservation> predObs =
-                                 new ArrayList<PredictorObservation> ();
-    ArrayList<PredictorParallelTask> predPTask =
-                                 new ArrayList<PredictorParallelTask> ();
+	/**
+	 * Constructs a list of parallel tasks from the input list of observations for
+	 * processing on concurrent or distributed parallel systems.
+	 *
+	 * @param obs            List of all observations from which parallel tasks will
+	 *                       be constructed.
+	 * @param tomoModelPath  The path to the tomography model required by each task.
+	 * @param numPredPerTask Approximate number of predictions per task.
+	 * @param predictorProps Properties required by the predictor.
+	 * @param saveRayPaths   Boolean, which if true, saves all ray paths requested
+	 *                       for tomography contained in the list obs, regardless of
+	 *                       the skip flag setting.
+	 * 
+	 * @return List of all parallel prediction tasks.
+	 */
+	public static ArrayList<PredictorParallelTask> buildPredictorParallelTasks(ObservationList obs,
+			String tomoModelPath, int numPredPerTask, PropertiesPlusGMP predictorProps,
+			boolean saveRayPaths) {
+		
+		PredictorParallelTask ppt;
 
-    // build path information for each bundle
+		// set up predictor observation and predictor parallel task lists
 
-    String modelFilePath = "", polyFilePath = "";
-    try
-    {
-      GeoTessModel geoModel = obs.getGeoModel();
-      modelFilePath = geoModel.getCurrentModelFileName();
-      File polygonFile = geoModel.getActiveRegionPolygonFile();
-      if (polygonFile == null)
-        polyFilePath = "";
-      else
-        polyFilePath = polygonFile.getCanonicalPath();
-    }
-    catch (Exception ex)
-    {
-      ex.printStackTrace();
-    }
+		ArrayList<PredictorObservation> taskPredObsList = new ArrayList<PredictorObservation>();
+		ArrayList<PredictorParallelTask> predTaskList = new ArrayList<PredictorParallelTask>();
 
-    // set the last np tasks (approximately) to decrease several observation per
-    // task such that the last task has at most nrmin observations (Note: this is
-    // a performance tweak so that the processors are not lying around while the
-    // last tasks finish).
+		// build path information for each bundle
 
-    int np = 200;
-    int nrmin = 10;
-    int nr = 0;
-    for (int i = 0; i < np; ++i)
-      nr += numPredPerTask - (numPredPerTask - nrmin) * i / (np - 1);
-    int Nt = (obs.size() - nr) / numPredPerTask;
-    int n = numPredPerTask;
+		String predModelPath = "", polyFilePath = "";
+		try {
+			GeoTessModel geoModel = obs.getGeoModel();
+			predModelPath = geoModel.getCurrentModelFileName();
+			File polygonFile = geoModel.getActiveRegionPolygonFile();
+			if (polygonFile == null)
+				polyFilePath = "";
+			else
+				polyFilePath = polygonFile.getCanonicalPath();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
 
-    // loop over all observations and fill the task bundles
+		// set the last np tasks (approximately) to decrease several observations per
+		// task such that the last task has at most nrmin observations (Note: this is
+		// a performance tweak so that the processors are not lying around while the
+		// last few tasks finish a full prediction set).
 
-    int tskcnt = 0;
-    int obscnt = 0;
-    for (ObservationTomo ob : obs)
-    {
-      // add BenderObservations to current list of PredictorObservations until
-    	// full then create a new PredictorParallelTask. Note: Only add observations
-    	// that are valid for tomography and not marked for skipping. If the
-    	// save ray path flag (saveRayPaths) is set then add them even if they are
-    	// marked for skipping since ray path information will be required for
-    	// output at the end of the current iteration.
+		int np = 200;
+		int nrmin = 10;
+		int nr = 0;
+		for (int i = 0; i < np; ++i)
+			nr += numPredPerTask - (numPredPerTask - nrmin) * i / (np - 1);
+		int Nt = (obs.size() - nr) / numPredPerTask;
+		int n = numPredPerTask;
 
-    	if (ob.getStatus().isValidForTomography() &&
-    			(saveRayPaths || !ob.isSkipRayTrace()))
-//      if ((!ob.getStatus().ignorePrediction() ||
-//          (ob.getStatus() == ObservationStatus.NO_STATUS) ||
-//          ob.usePoorlyRepresentedInTomography()) &&
-//          !ob.isSkipRayTrace())
-      {
-      	// add a new request (request has bounce point fixed if
-      	// ob.isSkipBouncePointOptimization() is true
+		// loop over all observations and fill the task bundles
 
-    		try
-    		{
-          predObs.add(ob.getPredictorObservation(saveRayPaths));
-    		}
-        catch (Exception ex)
-        {
-          ex.printStackTrace();
-        }
+		int tskcnt = 0;
+		int obscnt = 0;
+		for (ObservationTomo ob : obs) {
+			// add BenderObservations to current list of PredictorObservations until
+			// full then create a new PredictorParallelTask. Note: Only add observations
+			// that are valid for tomography and not marked for skipping. If the
+			// save ray path flag (saveRayPaths) is set then add them even if they are
+			// marked for skipping since ray path information will be required for
+			// output at the end of the current iteration.
 
-        // if hit max or end, create a new bundle and add to list
+			if (ob.getStatus().isValidForTomography() && (saveRayPaths || !ob.isSkipRayTrace())) {
+				
+				// add a new request (request has bounce point fixed if
+				// ob.isSkipBouncePointOptimization() is true
 
-        if ((predObs.size() == n) || (obscnt == obs.size() - 1))
-        {
-          // create a new bundle and add it to the list
-          bob = new PredictorParallelTask(modelFilePath, tomoModelPath,
-                                          polyFilePath, predObs);
-          bob.setDefaultPredictorProperties(predictorProps);
+				try {
+					taskPredObsList.add(ob.getPredictorObservation(saveRayPaths));
+				} catch (Exception ex) {
+					ex.printStackTrace();
+				}
 
-//          if (bsm != null) bob.setBenderSearchMethod(bsm);
+				// if hit max or end, create a new bundle and add to list
 
-          predPTask.add(bob);
+				if ((taskPredObsList.size() == n) || (obscnt == obs.size() - 1)) {
+					// create a new bundle and add it to the list
+					ppt = new PredictorParallelTask(predModelPath, tomoModelPath, polyFilePath,
+							taskPredObsList);
+					ppt.setDefaultPredictorProperties(predictorProps);
 
-          // clear list of bender observations for the next bundle
+					predTaskList.add(ppt);
 
-          predObs.clear();
+					// clear list of bender observations for the next bundle
 
-          // increment the task count and see if we are at the last np (or so)
-          // tasks where the observation count will decrease linearly down to
-          // nrmin by the last task
+					taskPredObsList.clear();
 
-          ++tskcnt;
-          if (tskcnt > Nt)
-          {
-            n = numPredPerTask -
-                (numPredPerTask - nrmin) * (tskcnt - Nt - 1) / (np - 1);
-            if (n < nrmin) n = nrmin;
-          }
-        }
+					// increment the task count and see if we are at the last np (or so)
+					// tasks where the observation count will decrease linearly down to
+					// nrmin by the last task
 
-        // increment the observation count and continue
+					++tskcnt;
+					if (tskcnt > Nt) {
+						n = numPredPerTask - (numPredPerTask - nrmin) * (tskcnt - Nt - 1) / (np - 1);
+						if (n < nrmin)
+							n = nrmin;
+					}
+				}
 
-        ++obscnt;
+				// increment the observation count and continue
 
-      } // end if (!ob.getStatus().ignorePrediction())
-    } // end for (ObservationTomo ob : obs)
+				++obscnt;
 
-    return predPTask;
-  }
+			} // end if (ob.getStatus().isValidForTomography() ...)
+		} // end for (ObservationTomo ob : obs)
+
+		return predTaskList;
+	}
 
   /**
    * Sets the task submission time (called only by the client).
@@ -1026,7 +699,7 @@ public class PredictorParallelTask extends ParallelTask
 	          if (aOutput)
 	          {
 	            System.out.println("");
-	            System.out.println("Created Tomography GeoModel ...");
+	            System.out.println("Created Tomography GeoTessModel ...");
 	            System.out.println(aTomoModel.getMetaData().getInputModelFile().getCanonicalPath());
 	            System.out.println("");
 	          }
@@ -1055,12 +728,12 @@ public class PredictorParallelTask extends ParallelTask
       if (pi.getRayPath() != null)
       {
         // valid ray ... get tomography grid weights
+    	  
       	pi.getRayPath(rayPathUnitVec, rayPathRadii);
       	aTomoModel.getWeights(rayPathUnitVec, rayPathRadii, null,
       			                  InterpolatorType.LINEAR,
       			                  InterpolatorType.LINEAR, weights);
-//        aTomoModel.getWeights(ray.getWaveType(), ray.getRayPath(),
-//                              weights);
+      	
         // loop over all entries and put them in an array ... set the index and
         // weight arrays into the predictor result
 
@@ -1081,7 +754,6 @@ public class PredictorParallelTask extends ParallelTask
         // result array
 
         if (!po.returnRayPath()) pi.nullifyRayPath();
-        //pi.nullifyActiveNodeWeights();
       }
     }
     else

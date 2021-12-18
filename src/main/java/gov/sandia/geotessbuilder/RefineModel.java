@@ -59,7 +59,7 @@ import gov.sandia.gmp.util.containers.hash.sets.HashSetInteger.Iterator;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.globals.InterpolatorType;
 
-public class RefineModel {
+public class RefineModel extends GeoTessModel {
 
 	/**
 	 * 

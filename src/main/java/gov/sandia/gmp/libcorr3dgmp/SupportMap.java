@@ -231,6 +231,11 @@ public class SupportMap
     ArrayList<Site> stations = loadSites(properties);
 
     ArrayList<Model> models = loadModels(properties);
+    
+    StringBuffer buf = new StringBuffer();
+    for (Model model : models)
+    	buf.append(", ").append(model.station.getSta());
+    String stationNames = buf.toString().substring(2);
 
     double maxSeparationKm = properties.getDouble("maxSeparationKm", 10);
 
@@ -305,6 +310,8 @@ public class SupportMap
     output.write(String.format("# associateByRefsta = %b%n"
         + "# maxSeparationKm = %1.2f%n",
         associateByRefsta, maxSeparationKm));
+    
+    output.write("# Supported stations: "+stationNames+"\n");
 
     output.write("#\n");
 
@@ -432,6 +439,8 @@ public class SupportMap
                 lcm.getSite().toString() + "  " + lcm.getPhase())
             .append(Globals.NL);
           models.add(new Model(models.size(), file, lcm));
+          lcm = null;
+          Runtime.getRuntime().gc();
         }
         catch (Exception e)
         {

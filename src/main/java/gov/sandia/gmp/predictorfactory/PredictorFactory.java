@@ -61,6 +61,7 @@ import gov.sandia.gmp.libcorr3dgmp.LibCorr3DModelsGMP;
 import gov.sandia.gmp.lookupdz.LookupTablesGMP;
 import gov.sandia.gmp.slbmwrapper.SLBMWrapper;
 import gov.sandia.gmp.util.exceptions.GMPException;
+import gov.sandia.gmp.util.globals.InterpolatorType;
 import gov.sandia.gmp.util.globals.Utils;
 import gov.sandia.gmp.util.logmanager.ScreenWriterOutput;
 
@@ -539,12 +540,22 @@ public class PredictorFactory
 					int ecnt = 0;
 					while (true) {
 						try {
-							libcorr = new LibCorr3DModelsGMP(pathCorrRoot, relativeGridPath, preloadModels, logger);
+							InterpolatorType interpTypeHorz = InterpolatorType
+									.valueOf(properties.getProperty(
+											prefix + "LibCorrInterpolatorTypeHorizontal",
+											"linear").toUpperCase());
+
+							InterpolatorType interpTypeRadial = InterpolatorType
+									.valueOf(properties.getProperty(
+											prefix + "LibCorrInterpolatorTypeRadial", "linear")
+											.toUpperCase());
+
+							libcorr = new LibCorr3DModelsGMP(pathCorrRoot, relativeGridPath, preloadModels, logger, interpTypeHorz, interpTypeRadial);
 
 							correctionSurfaces.put(pathCorrRoot.getCanonicalPath(), libcorr);
 
 							if (logger != null && logger.getVerbosity() > 0)
-								logger.writeln("PredictorFactory loaded LibCorr3DModelsGMP " + libcorr.getRootPath().getCanonicalPath());
+								logger.writeln("PredictorFactory loaded LibCorr3DModelsGMP " + libcorr.toString());
 
 							break;
 						}
@@ -781,6 +792,14 @@ public class PredictorFactory
 	public int getPredictionRequestQueueSize()
 	{
 		return predictionRequestQueueSize;
+	}
+
+	/**
+	 * Retrieve a Map from directory name to LibCorr3DModelsGMP.
+	 * @return
+	 */
+	public static HashMap<String, LibCorr3DModelsGMP> getCorrectionSurfaces() {
+		return correctionSurfaces;
 	}
 
 }

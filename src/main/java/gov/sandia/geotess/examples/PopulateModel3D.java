@@ -221,7 +221,7 @@ public class PopulateModel3D
 		for (int vertex = 0; vertex < model.getNVertices(); ++vertex)
 		{
 			// retrieve the unit vector corresponding to the i'th vertex 
-			double[] unit_vector = model.getGrid().getVertex(vertex);
+			double[] unit_vector = model.getVertex(vertex);
 
 			// find the latitude and longitude of vertex, in degrees
 			double lat = VectorGeo.getLatDegrees(unit_vector);

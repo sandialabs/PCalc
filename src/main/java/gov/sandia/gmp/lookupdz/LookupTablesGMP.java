@@ -165,14 +165,14 @@ public class LookupTablesGMP extends Predictor implements UncertaintyInterface
 	protected EnumSet<SeismicPhase> supportedPhases;
 
 	public LookupTablesGMP(PropertiesPlusGMP properties)
-			throws GMPException, IOException
+			throws Exception
 	{
 		this(properties, null);
 	}
 
 	public LookupTablesGMP(PropertiesPlusGMP properties,
 			LookupTableInterface libcorr3DModelsGMP)
-			throws GMPException, IOException
+			throws Exception
 	{
 		super(properties, properties.getInt("lookup2dPredictionsPerTask", 10000));
 
@@ -328,8 +328,7 @@ public class LookupTablesGMP extends Predictor implements UncertaintyInterface
 	 * @throws IOException
 	 */
 	protected void setupPathCorrectionsInterface(PropertiesPlusGMP properties,
-			LookupTableInterface libcorr3DModelsGMP) throws GMPException,
-		IOException
+			LookupTableInterface libcorr3DModelsGMP) throws Exception
 	{
 		String prefix = "lookup2d";
 		String type = properties.getProperty(prefix + "PathCorrectionsType");

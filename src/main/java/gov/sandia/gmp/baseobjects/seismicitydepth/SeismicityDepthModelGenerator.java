@@ -260,58 +260,6 @@ public class SeismicityDepthModelGenerator {
 		// build the grid
 		GeoTessGrid grid = (GeoTessGrid)GeoTessBuilderMain.run(properties);
 
-		//		// if any polygons were specified, retrieve the polygon objects.
-		//		ArrayList<Polygon> polygons = new ArrayList<Polygon>();
-		//		String[] sp = properties.getProperty("polygons", "").split(";");
-		//		for (String p : sp)
-		//			if (p.trim().length() > 0)
-		//				polygons.add(new Polygon(new File(p.split(",")[0].trim())));
-		//
-		//		// find the indices of the vertices that are located outside of any polygon.
-		//		HashSetInteger outside = new HashSetInteger(grid.getNVertices()/10);
-		//		if (polygons.size() > 0)
-		//		{
-		//			boolean inside;
-		//			for (int vertex=0; vertex<grid.getNVertices(); ++vertex)
-		//			{
-		//				inside = false;
-		//				for (Polygon p : polygons)
-		//				{
-		//					inside = p.contains(grid.getVertex(vertex));
-		//					if (inside)
-		//						break;
-		//				}
-		//				if (!inside)
-		//					outside.add(vertex);
-		//			}
-		//
-		//			// outside now contains the indices of all vertices that lie outside
-		//			// of the polygons.  But we want vertices that are outside, but connected
-		//			// directly to a vertex that is inside, to also be considered inside.
-		//
-		//			// Find the indices of vertices that are outside but connected to a 
-		//			// vertex that is inside.
-		//			HashSetInteger nearby = new HashSetInteger();
-		//			// iterate over all the vertices that are outside
-		//			Iterator it = outside.iterator();
-		//			while (it.hasNext())
-		//			{
-		//				int vertex = it.next();
-		//				// iterate over all the neighbors of the current vertex (which is outside).
-		//				for (int neighbor : grid.getVertexNeighbors(0, grid.getLastLevel(0), vertex))
-		//					if (!outside.contains(neighbor))
-		//					{
-		//						// if any neighbor is inside, add the vertex to the set of nearby vertices.
-		//						nearby.add(vertex);
-		//						break;
-		//					}
-		//			}
-		//			// iterate over the nearby vertices and remove them from outside.
-		//			it = nearby.iterator();
-		//			while (it.hasNext())
-		//				outside.remove(it.next());
-		//		}
-
 		// Create a MetaData object in which we can specify information needed for model construction.
 		GeoTessMetaData metaData = new GeoTessMetaData();
 
@@ -348,17 +296,17 @@ public class SeismicityDepthModelGenerator {
 		// populate the model with topography and smoothed_max_depth values
 		// interpolated from the input models.
 		if (!Double.isNaN(constantMaxDepth))
-			for (int vtx = 0; vtx < model.getGrid().getNVertices(); ++vtx)
+			for (int vtx = 0; vtx < model.getNVertices(); ++vtx)
 				model.setProfile(vtx, Data.getDataFloat(Float.NaN, constantMaxDepth));
 		else
-			for (int vtx = 0; vtx < model.getGrid().getNVertices(); ++vtx)
+			for (int vtx = 0; vtx < model.getNVertices(); ++vtx)
 			{
 				// if (outside.contains(vtx)) model.setProfile(vtx); else 
 				if (!Double.isNaN(constantMaxDepth))
 					model.setProfile(vtx, Data.getDataFloat(Float.NaN, constantMaxDepth));
 				else
 					model.setProfile(vtx, Data.getDataFloat(Float.NaN, (float)Math.max(minimumMaxDepth, 
-							inputMaxDepthModel.set(grid.getVertex(vtx), 1e4).getValue(1))));
+							inputMaxDepthModel.set(model.getVertex(vtx), 1e4).getValue(1))));
 			}
 
 		System.out.println("Populating model with topography data...");
@@ -447,10 +395,10 @@ public class SeismicityDepthModelGenerator {
 
 		// populate the model with topography and smoothed_max_depth values
 		// interpolated from the input models.
-		for (int vtx = 0; vtx < model.getGrid().getNVertices(); ++vtx)
+		for (int vtx = 0; vtx < model.getNVertices(); ++vtx)
 		{
 			// set the geographic locations in the two input models.
-			maxDepthModel.set(grid.getVertex(vtx), 1.);
+			maxDepthModel.set(model.getVertex(vtx), 1.);
 
 			// retrieve interpolated values and put them in the model.
 			// topography is set to NaN and computed later.
@@ -772,7 +720,7 @@ public class SeismicityDepthModelGenerator {
 							-1e-3*Math.round(sum[v]/weight[v]));
 				else
 					model.getProfile(v, 0).getData()[0].setValue(attributeIndex, 
-							-1e-3*Math.round(interpolateEtopo1(topo, model.getGrid().getVertex(v))));
+							-1e-3*Math.round(interpolateEtopo1(topo, model.getVertex(v))));
 			}
 
 	}

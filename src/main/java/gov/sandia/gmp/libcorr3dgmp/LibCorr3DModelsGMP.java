@@ -49,6 +49,7 @@ import gov.sandia.gmp.baseobjects.globals.SeismicPhase;
 import gov.sandia.gmp.baseobjects.interfaces.LookupTableInterface;
 import gov.sandia.gmp.baseobjects.interfaces.ReceiverInterface;
 import gov.sandia.gmp.util.exceptions.GMPException;
+import gov.sandia.gmp.util.globals.InterpolatorType;
 import gov.sandia.gmp.util.globals.Site;
 import gov.sandia.gmp.util.logmanager.ScreenWriterOutput;
 
@@ -82,18 +83,19 @@ public class LibCorr3DModelsGMP extends LibCorr3DModels implements LookupTableIn
 	HashSet<GeoAttributes> supportedGeoAttributes;
 	
 	
-	public LibCorr3DModelsGMP(File rootPath, String relGridPath,
-			boolean preloadModels)
-					throws IOException, GMPException
+	public LibCorr3DModelsGMP(File rootPath, String relGridPath, boolean preloadModels, 
+			InterpolatorType interpTypeHorz, InterpolatorType interpTypeRadial)
+					throws Exception
 	{
-		this(rootPath, relGridPath, preloadModels, null);
+		this(rootPath, relGridPath, preloadModels, null, interpTypeHorz, interpTypeRadial);
 	}
 
 	public LibCorr3DModelsGMP(File rootPath, String relGridPath,
-			boolean preloadModels, ScreenWriterOutput logger)
-					throws IOException, GMPException
+			boolean preloadModels, ScreenWriterOutput logger, 
+			InterpolatorType interpTypeHorz, InterpolatorType interpTypeRadial)
+					throws Exception
 	{
-		super(rootPath, relGridPath, preloadModels, logger);
+		super(rootPath, relGridPath, preloadModels, logger, interpTypeHorz, interpTypeRadial);
 		
 		attributeIndexer = new AttributeIndexerSmart();
 		receivers = new HashMap<String, ArrayList<ReceiverInterface>>(getNSiteNames());

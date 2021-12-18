@@ -218,8 +218,7 @@ public class SLBMWrapper extends Predictor implements UncertaintyInterface
 	 * @throws GMPException
 	 * @throws IOException
 	 */
-	public SLBMWrapper(PropertiesPlusGMP properties)
-			throws GMPException, IOException
+	public SLBMWrapper(PropertiesPlusGMP properties) throws Exception
 	{
 		this(properties, null);
 	}
@@ -233,7 +232,7 @@ public class SLBMWrapper extends Predictor implements UncertaintyInterface
 	 */
 	public SLBMWrapper(PropertiesPlusGMP properties,
 			LookupTableInterface libcorr3DModelsGMP)
-			throws GMPException, IOException
+			throws Exception
 	{
 		super(properties, properties.getInt("slbmPredictionsPerTask", 100));
 
@@ -728,8 +727,7 @@ public class SLBMWrapper extends Predictor implements UncertaintyInterface
 	 * @throws IOException
 	 */
 	protected void setupPathCorrectionsInterface(PropertiesPlusGMP properties,
-			LookupTableInterface libcorr3DModelsGMP) throws GMPException,
-		IOException
+			LookupTableInterface libcorr3DModelsGMP) throws Exception
 	{
 		String prefix = "slbm";
 		String type = properties.getProperty(prefix + "PathCorrectionsType");

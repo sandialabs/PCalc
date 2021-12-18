@@ -178,8 +178,10 @@ public class PCalc
 		{
 			if (args.length == 0)
 			{
-				System.out.print(String.format("PCalc version %s   %s%n%n", 
-						PCalc.getVersion(), GMTFormat.localTime.format(new Date())));
+				System.out.print(String.format("PCalc.%s running on %s started %s%n%n", 
+						PCalc.getVersion(),
+						Globals.getComputerName(),
+						GMTFormat.localTime.format(new Date())));
 
 				try {
 					// when running from an executable jar, this will print out all the
@@ -231,7 +233,14 @@ public class PCalc
 							Globals.elapsedTime(wallClock)));
 				}
 				else
+				{
+					System.out.print(String.format("PCalc.%s running on %s started %s%n%n", 
+							PCalc.getVersion(),
+							Globals.getComputerName(),
+							GMTFormat.localTime.format(new Date())));
+
 					System.out.println("\nProperty file "+arg+" does not exist.\n");
+				}
 
 			}
 		} 
@@ -309,8 +318,10 @@ public class PCalc
 
 		if (log.isOutputOn())
 		{
-			log.write(String.format("PCalc version %s   %s%n%n", 
-					PCalc.getVersion(), GMTFormat.localTime.format(new Date())));
+			log.write(String.format("PCalc.%s running on %s started %s%n%n", 
+					PCalc.getVersion(),
+					Globals.getComputerName(),
+					GMTFormat.localTime.format(new Date())));
 
 			log.write(String.format("Properties:%n%s%n", properties.toString()));
 		}
@@ -663,13 +674,19 @@ public class PCalc
 
 				if (log.isOutputOn())
 				{
+					int nvalid = 0;
 					for (PredictionInterface prediction : predictions)
-						if (prediction.getErrorMessage().length() > 0 && !prediction.getErrorMessage().contains(
-								"LookupTable.interpolate() returned code 11: Extrapolated point in hole of curve"))
+					{
+						if (prediction.getErrorMessage().length() > 0 
+								&& !prediction.getErrorMessage().contains("Extrapolated point in hole of curve")
+								&& !prediction.getErrorMessage().contains("ray diffracts along the CMB"))
 							log.writeln(prediction.getErrorMessage());
+						if (prediction.isValid())
+							++nvalid;
+					}
 
-					log.write(String.format("Processed %d points x %d depths =  %d predictions in %s%n",
-							nPoints, nDepths, predictions.size(), Globals.elapsedTime(t)));
+					log.write(String.format("Processed %d predictions, %d valid, %d invalid, in %s%n",
+							predictions.size(), nvalid, (predictions.size()-nvalid), Globals.elapsedTime(t)));
 				}
 
 				if (outputAttributes.contains(GeoAttributes.RAY_PATH))

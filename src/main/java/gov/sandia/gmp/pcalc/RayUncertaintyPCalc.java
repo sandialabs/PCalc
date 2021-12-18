@@ -44,13 +44,15 @@ import java.util.Scanner;
 import gov.sandia.gmp.baseobjects.geovector.GeoVector;
 import gov.sandia.gmp.baseobjects.globals.GeoAttributes;
 import gov.sandia.gmp.rayuncertainty.RayUncertainty;
+import gov.sandia.gmp.util.containers.arraylist.ArrayListInt;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.globals.Site;
 import gov.sandia.gmp.util.propertiesplus.PropertiesPlus;
 
 public class RayUncertaintyPCalc {
 	
-
+	private ArrayListInt idMap;
+	
 	public void run(PCalc pcalc, Bucket dataBucket) throws Exception
 	{
 		if (pcalc.log.getVerbosity() >= 1)
@@ -58,13 +60,33 @@ public class RayUncertaintyPCalc {
 		
 		long timer = System.currentTimeMillis();
 		
+		if (pcalc.log.getVerbosity() >= 1)
+			pcalc.log.writef("    %s  Build ray uncertainty properties file...%n", dateString());
+		
 		// extract ray uncertainty properties from the pcalc properties.
 		PropertiesPlus properties = buildPropertyFile(pcalc, dataBucket);
 		
+		if (pcalc.log.getVerbosity() >= 1)
+			pcalc.log.writef("    %s  Run ray uncertainty...%n", dateString());
+		
 		runRayUncertainty(properties);
+		
+		if (pcalc.log.getVerbosity() >= 1)
+			pcalc.log.writef("    %s  Extract ray uncertainty results...%n", dateString());
 		
 		extractUncertaintyValues(properties, pcalc, dataBucket);
 		
+		if (pcalc.log.getVerbosity() >= 1)
+			pcalc.log.writef("    %s  Delete temporary files and directories...%n", dateString());
+		
+		deleteTemporaryFiles(properties, pcalc);
+		
+		if (pcalc.log.getVerbosity() >= 1)
+			pcalc.log.writef("Computing RayUncertainties completed in %s%n%n", Globals.elapsedTime(timer));
+	}
+	
+	private void deleteTemporaryFiles(PropertiesPlus properties, PCalc pcalc) 
+	{
 		try
 		{
 			// write a file named DONE in the ioDirectory indicating that
@@ -74,7 +96,8 @@ public class RayUncertaintyPCalc {
 			{
 				f = new File(f, "DONE");
 				FileWriter fw = new FileWriter(f);
-				fw.write(new Date().toString());
+				fw.write("RayUncertaintyPCalc completed all work and the directory \n"
+						+ "containing this file should have been deleted \n"+dateString());
 				fw.close();
 			}
 		}
@@ -84,8 +107,9 @@ public class RayUncertaintyPCalc {
 		
 		// Rename the properties file from rayuncertainty-sta-yyyy-MM-dd-HH-mm-ss-SSS.properties
 		// to deleteme-sta-yyyy-MM-dd-HH-mm-ss-SSS.properties
-		File propertiesFile = properties.getFile("propertiesFileName");
+		File propertiesFile = null;
 		try {
+			propertiesFile = properties.getFile("propertiesFileName");
 			if (propertiesFile != null)
 			{
 				File newFileName = new File(propertiesFile.getParentFile(), 
@@ -105,12 +129,11 @@ public class RayUncertaintyPCalc {
 			pcalc.log.writeln(ex);
 		}
 		
-
-		
 		// Rename the iodirectory from rayuncertainty-yyyy-MM-dd-HH-mm-ss-SSS
 		// to deleteme-yyyy-MM-dd-HH-mm-ss-SSS
-		File ioDirectory = properties.getFile("ioDirectory");
+		File ioDirectory = null;
 		try {
+			ioDirectory = properties.getFile("ioDirectory");
 			if (ioDirectory != null)
 			{
 				File newFileName = new File(ioDirectory.getParentFile(), 
@@ -136,9 +159,6 @@ public class RayUncertaintyPCalc {
 		} catch (Exception e) {
 			pcalc.log.writeln(e);
 		}
-		
-		if (pcalc.log.getVerbosity() >= 1)
-			pcalc.log.writef("Computing RayUncertainties completed in %s%n%n", Globals.elapsedTime(timer));
 	}
 	
 	private void extractUncertaintyValues(PropertiesPlus properties, PCalc pcalc, Bucket dataBucket) throws Exception
@@ -163,7 +183,7 @@ public class RayUncertaintyPCalc {
 			++count;
 			Scanner in = new Scanner(line);
 			in.next(); // ignore sta 
-			dataBucket.modelValues[in.nextInt()][idx] = Math.sqrt(in.nextDouble());
+			dataBucket.modelValues[idMap.get(in.nextInt())][idx] = Math.sqrt(in.nextDouble());
 			in.close();
 		}
 		input.close();
@@ -263,6 +283,7 @@ public class RayUncertaintyPCalc {
 			p.setProperty("parallelMode", pcalc.properties.getProperty("parallelMode"));
 		if (pcalc.properties.containsKey("maxProcessors")) 
 			p.setProperty("maxProcessors", pcalc.properties.getProperty("maxProcessors"));
+		
 		if (pcalc.properties.containsKey("fabricApplicationName")) 
 			p.setProperty("fabricApplicationName", pcalc.properties.getProperty("fabricApplicationName"));
 		if (pcalc.properties.containsKey("fabricMaxThreadsPerNode")) 
@@ -286,9 +307,25 @@ public class RayUncertaintyPCalc {
 
 		p.setProperty("sourceDefinition", "PROPERTIESFILE");
 		StringBuffer sourceDefinitionList = new StringBuffer();
-		for (GeoVector point : dataBucket.points)
-			sourceDefinitionList.append(point.toString("%1.6f,%1.6f,%1.3f;"));
-		p.setProperty("sourceDefinitionList", sourceDefinitionList.toString());
+//		for (GeoVector point : dataBucket.points)
+//			sourceDefinitionList.append(point.toString(";%1.6f,%1.6f,%1.3f"));
+		// find the index of tt_delta_ak135 in the output attributes.
+		int ttid = Math.max(pcalc.outputAttributes.indexOf(GeoAttributes.TT_PATH_CORRECTION),
+				pcalc.outputAttributes.indexOf(GeoAttributes.TT_DELTA_AK135));
+		idMap = new ArrayListInt(dataBucket.points.size());
+		for (int i=0; i<dataBucket.points.size(); ++i)
+		{
+			// get the value of tt_delta_ak135
+			double tt = dataBucket.modelValues[i][ttid+1];
+			
+			// if tt_delta_ak135 is valid, add the source to the sourceDefinitionList
+			if (!Double.isNaN(tt) && tt != Globals.NA_VALUE)
+			{
+				sourceDefinitionList.append(dataBucket.points.get(i).toString(";%1.6f,%1.6f,%1.3f"));
+				idMap.add(i);
+			}
+		}
+		p.setProperty("sourceDefinitionList", sourceDefinitionList.toString().substring(1));
 
         File rayPropertiesFileName = new File(ioDirectory.getAbsoluteFile()+".properties");
         p.setProperty("propertiesFileName", rayPropertiesFileName.getAbsolutePath());
@@ -342,8 +379,18 @@ public class RayUncertaintyPCalc {
 	private synchronized File getWorkDir(File root, String sta) throws Exception
 	{
 		Thread.sleep(50);
-		DateFormat tformat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS");
-		return new File(root, String.format("rayuncertainty-%s-%s",sta, tformat.format(new Date())));
+		String date = null;
+		try {
+			date = dateString();
+		} catch (Exception e) { 
+			date = String.format("%d", System.currentTimeMillis());
+		}
+		return new File(root, String.format("rayuncertainty-%s-%s-%s",
+				date, sta, Globals.getComputerName()));
+	}
+	
+	private String dateString() {
+		return new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-SSS").format(new Date());
 	}
 
 }

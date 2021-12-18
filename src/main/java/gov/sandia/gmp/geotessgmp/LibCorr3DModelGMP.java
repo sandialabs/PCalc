@@ -341,7 +341,7 @@ public class LibCorr3DModelGMP extends LibCorr3DModel implements ModelInterface
 	 */
 	public double[] getVertexUnitVector(int vertex)
 	{
-		return getGrid().getVertex(vertex);
+		return getVertex(vertex);
 	}
 
 	/**
@@ -352,7 +352,7 @@ public class LibCorr3DModelGMP extends LibCorr3DModel implements ModelInterface
 	 */
 	public double getDistance(int vertex1, int vertex2)
 	{
-		return VectorUnit.angle(getGrid().getVertex(vertex1), getGrid().getVertex(vertex2));
+		return VectorUnit.angle(getVertex(vertex1), getVertex(vertex2));
 	}
 
 	public boolean isNaN(int vertexIndex, int layerIndex, int nodeIndex,

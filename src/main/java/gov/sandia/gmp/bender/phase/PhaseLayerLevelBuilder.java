@@ -405,7 +405,7 @@ public class PhaseLayerLevelBuilder
 		for (int i = 0; i < mdl.getNVertices(); ++i) {
 			Profile layerProfile = mdl.getProfile(i, layer);
 			if (layerProfile.getNRadii() >= 2) {
-				double[] uv = mdl.getGrid().getVertex(i);
+				double[] uv = mdl.getVertex(i);
 
 				// find minimum max depth
 

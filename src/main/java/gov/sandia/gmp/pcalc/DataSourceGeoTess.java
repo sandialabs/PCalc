@@ -55,6 +55,7 @@ import gov.sandia.gmp.util.globals.DataType;
 import gov.sandia.gmp.util.globals.Globals;
 import gov.sandia.gmp.util.numerical.polygon.Polygon;
 import gov.sandia.gmp.util.numerical.vector.VectorGeo;
+import gov.sandia.gmp.util.numerical.vector.VectorUnit;
 import gov.sandia.gmp.util.propertiesplus.PropertiesPlus;
 
 public class DataSourceGeoTess extends DataSource
@@ -88,9 +89,13 @@ public class DataSourceGeoTess extends DataSource
 			if (properties.containsKey("geotessDepths"))
 			{
 				depths = properties.getDoubleArray("geotessDepths");
-				if (depths.length == 0)
-					throw new Exception(String.format("property geotessDepths = %s but must specify at least one depth",
+				if (depths.length < 2)
+					throw new Exception(String.format("property geotessDepths = %s but must specify at least two depths",
 							properties.getProperty("geotessDepths")));
+				for (int i=1; i<depths.length; ++i)
+					if (depths[i] <= depths[i-1])
+						throw new Exception(String.format("property geotessDepths = %s.  Depths are not monotonically increasing.",
+								properties.getProperty("geotessDepths")));
 			}
 
 			if (properties.containsKey("geotessDepthSpacing"))
@@ -182,7 +187,19 @@ public class DataSourceGeoTess extends DataSource
 		GeoTessGrid grid = null;
 
 		if (pcalc.properties.containsKey("geotessInputGridFile"))
+		{
 			grid = new GeoTessGrid(pcalc.properties.getFile("geotessInputGridFile"));
+			// if grid vertex[0] is located at the north pole, 
+			// and the current station is not located at the north pole,
+			// and property geotessRotateGridToStation is true, 
+			// then set euler rotation angles in the model.
+			double[] station = receiver.getPosition().getUnitVector();
+			if (VectorUnit.parallel(grid.getVertex(0), new double[] {0., 0., 1.})
+					&& !VectorUnit.parallel(station, new double[] {0., 0., 1.})
+					&& pcalc.properties.getBoolean("geotessRotateGridToStation", false))
+				metaData.setEulerRotationAngles(VectorUnit.getEulerRotationAnglesDegrees(
+								station));
+		}
 		else
 		{
 			PropertiesPlus gridProperties = new PropertiesPlus();
@@ -276,7 +293,7 @@ public class DataSourceGeoTess extends DataSource
         {
         	// this is a 2D model with data only at the surface of the earth
         	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
-        		if (polygon.contains(bucket.geotessModel.getGrid().getVertex(vtx)))
+        		if (polygon.contains(bucket.geotessModel.getVertex(vtx)))
         			bucket.geotessModel.setProfile(vtx,
         					metaData.getDataType() == DataType.DOUBLE ?
         							Data.getDataDouble(dataD.clone()) :
@@ -287,46 +304,76 @@ public class DataSourceGeoTess extends DataSource
         else if (depths != null)
         {
         	double minDepth, maxDepth;
-        	
+
         	// user specified a list of depths where radial nodes are to be deployed.
         	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
         	{
         		// retrieve the unit vector corresponding to the current vertex
-        		double[] vertex = bucket.geotessModel.getGrid().getVertex(vtx);
+        		double[] vertex = bucket.geotessModel.getVertex(vtx);
 
         		double earthRadius = VectorGeo.getEarthRadius(vertex);
-        		
+
         		double[] z = depths.clone();
-            	
+
         		if (spanSeismicityDepth)
         		{
         			// user specified that only depths that span the seismicity depth range
         			// are to be included.  So, all depths > seismicity_depth_min and
         			// < seismicity_depth_max, plus one depth <= seismicity_depth_min and
         			// one depth >= seismicity_depth_max
-        			
+
         			seismicity_depth.set(vertex, earthRadius);
-        			
-            		minDepth = seismicity_depth.getValue(seismicityDepthMinIndex);
 
-            		// maxDepth can be no less than minDepth and no greater than 700 km.
-            		maxDepth = Math.min(700., Math.max(minDepth, seismicity_depth.getValue(seismicityDepthMaxIndex)));
-            		
-            		// find index of depth such that depth[zfirst] <= minDepth
-                	int zfirst = Globals.hunt(depths, minDepth, true, true);
+        			minDepth = seismicity_depth.getValue(seismicityDepthMinIndex);
 
-            		// find index of depth such that depth[zlast] >= maxDepth
-                	int zlast = depths.length-1;                	
-                	for (int i=depths.length-1; i >= 0; --i)
-            			if (depths[i] >= maxDepth)
-            				zlast = i;            		
-                	
-                	// copy the depths from depths[] to a[]
-            		ArrayListDouble a = new ArrayListDouble(depths.length);
-            		for (int i=zfirst; i<=zlast; ++i)
-            			a.add(depths[i]);
-            		 
-            		z = a.toArray();
+        			// maxDepth can be no less than minDepth and no greater than 700 km.
+        			maxDepth = Math.min(700., Math.max(minDepth, seismicity_depth.getValue(seismicityDepthMaxIndex)));
+
+        			if (Math.abs(minDepth - maxDepth) < 1e-3)
+        				z = new double[] {maxDepth};
+        			else
+        			{
+        				// find index of depth such that depth[zfirst] <= minDepth
+        				int zfirst = Globals.hunt(depths, minDepth, true, true);
+
+        				// find index of depth such that depth[zlast] >= maxDepth
+        				int zlast = depths.length-1;                	
+        				for (int i=depths.length-1; i >= 0; --i)
+        					if (depths[i] >= maxDepth)
+        						zlast = i;  
+        					else
+        						break;
+
+        				// copy depths between zfirst and zlast inclusive from depths[] to a[].
+        				// There is guaranteed to be at least two of them.
+        				ArrayListDouble a = new ArrayListDouble(zlast-zfirst+1);
+        				for (int i=zfirst; i<=zlast; ++i)
+        					a.add(depths[i]);
+
+        				if (a.size() > 2)
+        				{
+        					// now set a[0]=minDepth and a[a.size()-1]=maxDepth
+        					double r1 = (minDepth-a.get(0))/(a.get(1)-a.get(0));
+        					double r2 = (maxDepth-a.get(a.size()-2))/(a.get(a.size()-1)-a.get(a.size()-2)); 
+        					if (a.size() == 3)
+        					{
+        						if (r1 > 0.9 || r2 < 0.1)
+        							a.remove(1);
+        					}
+        					else
+        					{
+        						if (r1 > 0.9)
+        							a.remove(1);
+
+        						if (r2 < 0.1)
+        							a.remove(a.size()-2);
+        					}
+        				}
+        				a.set(0, minDepth);
+        				a.set(a.size()-1, maxDepth);
+
+        				z = a.toArray();
+        			}
         		}
         		
         		float[] radii = new float[z.length];
@@ -359,7 +406,7 @@ public class DataSourceGeoTess extends DataSource
         	for (int vtx = 0; vtx < bucket.geotessModel.getNVertices(); ++vtx)
         	{
         		// retrieve the unit vector corresponding to the current vertex
-        		double[] vertex = bucket.geotessModel.getGrid().getVertex(vtx);
+        		double[] vertex = bucket.geotessModel.getVertex(vtx);
 
         		seismicity_depth.set(vertex, 1e4);
         		double minDepth = seismicity_depth.getValue(seismicityDepthMinIndex);

@@ -33,8 +33,8 @@
 package gov.sandia.gmp.util.globals;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Comparator;
-import java.util.LinkedList;
 import java.util.TreeSet;
 
 /**
@@ -47,7 +47,7 @@ import java.util.TreeSet;
 public class FindLatestJarFile {
 
 	public static void main(String[] args) {
-		
+
 		try {
 			if (args.length != 2)
 			{
@@ -57,45 +57,72 @@ public class FindLatestJarFile {
 						+ "   1 - The path to the directory in the maven-repo that contains the project files\n"
 						+ "   2 - [ snapshot | release ] to specify which jar file is to be returned.\n");
 			}
-			
+
 			// repoDir is the path to <maven-repo>/<project>
 			File repoDir = new File(args[0]);
-			
+
 			if (!repoDir.exists())
 				throw new Exception("The directory "+args[0]+" does not exist.");
-			
+
 			if (!repoDir.isDirectory())
 				throw new Exception("The File "+args[0]+" exists but is not a directory.");
-			
+
 			if (!args[1].equals("release") && !args[1].equals("snapshot"))
 				throw new Exception("Second command line argument must equal either snapshot or release");
-			
-			
+
+			// Container for version directories sorted by version number, largest version number first
+			TreeSet<File> versionDirectories = new TreeSet<>(new Comparator<File>() {
+				@Override
+				public int compare(File o1, File o2) {
+					// split the directory names on '.'
+					String[] version1 = o1.getName().replace("-SNAPSHOT", "").split("\\.");
+					String[] version2 = o2.getName().replace("-SNAPSHOT", "").split("\\.");
+					
+					// convert the components of the version numbers from strings to integers.
+					int[] v1 = new int[version1.length];
+					for (int i=0; i<version1.length; ++i) v1[i] = Integer.parseInt(version1[i]);
+					int[] v2 = new int[version2.length];
+					for (int i=0; i<version2.length; ++i) v2[i] = Integer.parseInt(version2[i]);
+					
+					//System.out.println(Arrays.toString(v1)+"  "+Arrays.toString(v2));
+
+					for (int i=0; i<Math.min(v1.length, v2.length); ++i)
+						if (v2[i] != v1[i])
+							return Integer.compare(v2[i], v1[i]);
+					return 0;
+				} });
+
+			// traverse all the release or snapshot directories in repoDir and add them to versionDirectories
+			// sorted in order of decreasing version number (largest version number first).
+			for (File d : repoDir.listFiles())
+				if (d.isDirectory() && (d.getName().contains("SNAPSHOT") ^ args[1].equals("release")))
+					versionDirectories.add(d);
+
+			if (versionDirectories.isEmpty())
+				throw new Exception("Directory "+args[0]+"\n"
+						+ "does not contain any version directories");
+
 			// Container for jar files sorted by modification date (most recent modification date first)
 			TreeSet<File> jarFiles = new TreeSet<>(new Comparator<File>() {
 				@Override
 				public int compare(File o1, File o2) {
 					return Long.compare(o2.lastModified(), o1.lastModified());
 				} });
-			
-			// traverse all the release or snapshot directories in repoDir and add all
-			// executable jar files to jarFiles
-			for (File d : repoDir.listFiles())
-				if (d.isDirectory() && (d.getName().contains("SNAPSHOT") ^ args[1].equals("release")))
-					for (File f : d.listFiles())
-						if (f.getName().endsWith("jar-with-dependencies.jar"))
-							jarFiles.add(f);
-			
+
+			for (File f : versionDirectories.first().listFiles())
+				if (f.getName().endsWith("-jar-with-dependencies.jar"))
+					jarFiles.add(f);
+
 			if (jarFiles.isEmpty())
-				throw new Exception("Directory "+repoDir.getAbsolutePath()+"\n"
+				throw new Exception("Directory "+versionDirectories.first().getAbsolutePath()+"\n"
 						+ "does not contain any jar files that end with 'jar-with-dependencies.jar'");
-			
+
 			System.out.println(jarFiles.first().getAbsolutePath());
-			
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		
+
 	}
 
 }
